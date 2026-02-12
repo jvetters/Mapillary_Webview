@@ -2,12 +2,12 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Mapillary + Mapbox Interactive Viewer</title>
+<title>Mapillary + Mapbox Production View</title>
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="referrer" content="no-referrer-when-downgrade">
 
-<link href="https://api.mapbox.com/mapbox-gl-js/v3.18.0/mapbox-gl.css" rel="stylesheet">
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.18.0/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 
 <link href="https://unpkg.com/mapillary-js@3.1.0/dist/mapillary.min.css" rel="stylesheet">
 <script src="https://unpkg.com/mapillary-js@3.1.0/dist/mapillary.min.js"></script>
@@ -18,8 +18,8 @@
   #mly { 
     position: absolute; bottom: 20px; right: 20px; 
     width: 400px; height: 300px; 
-    z-index: 10; border: 3px solid white; border-radius: 8px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.4); background: #000; 
+    z-index: 100; border: 3px solid white; border-radius: 8px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5); background: #000; 
   }
 </style>
 </head>
@@ -29,47 +29,56 @@
 <div id="map"></div>
 
 <script>
+  // Access Tokens
   mapboxgl.accessToken = 'pk.eyJ1IjoianZldHRlcnMiLCJhIjoiY21sazFhdDg5MDV3dDNlcTI3aXlwejIwaSJ9.ecEavihruz0TZguVQvRiVg';
+  const mlyToken = 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b';
 
+  // Initialize Map with 'Streets' style for better contrast with green dots
   const map = new mapboxgl.Map({
     container: 'map',
-    style: 'mapbox://styles/mapbox/standard',
+    style: 'mapbox://styles/mapbox/streets-v12', 
     zoom: 14, 
     center: [-87.622088, 41.878781] 
   });
 
-  // Initialize Viewer with your Client Token
+  // Initialize Mapillary Viewer
   const mly = new mapillary.Viewer({
-    accessToken: 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b',
+    accessToken: mlyToken,
     container: 'mly',
   });
 
   const marker = new mapboxgl.Marker({ color: '#FF0000' });
 
   map.on('load', () => {
+    // Adding Source
     map.addSource('mapillary', {
       type: 'vector',
-      tiles: ['https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b'],
+      tiles: ['https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=' + mlyToken],
       minzoom: 6, maxzoom: 14
     });
 
-    // We focus on the "image" bubbles for precise clicking
+    // Adding Points (Bubbles)
     map.addLayer({
       id: 'mapillary-points',
       type: 'circle',
       source: 'mapillary',
       'source-layer': 'image',
-      paint: { 'circle-radius': 6, 'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' }
+      paint: {
+        'circle-radius': 6,
+        'circle-color': '#35af6d',
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#ffffff'
+      }
     });
 
-    // When a bubble is clicked, get its ID and move the viewer
+    // Click Logic using moveToKey
     map.on('click', 'mapillary-points', (e) => {
       const imageId = e.features[0].properties.id;
-      mly.moveToKey(imageId)
-        .catch(err => console.error("Error loading image ID:", imageId, err));
+      mly.moveToKey(imageId.toString())
+        .catch(err => console.error("Load fail", err));
     });
 
-    // Update the red map marker when the photo changes
+    // Sync Marker
     mly.on('nodechanged', (node) => {
       marker.setLngLat([node.latLon.lon, node.latLon.lat]).addTo(map);
     });
