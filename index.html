@@ -43,12 +43,12 @@
     container: 'map',
     style: 'mapbox://styles/mapbox/standard',
     zoom: 10,
-    center: [-87.622088, 41.878781] // Initial focus (Chicago)
+    center: [-87.622088, 41.878781] 
   });
 
-  // 2. Initialize the Mapillary Viewer
+  // 2. Initialize the Mapillary Viewer with your new token
   const mly = new mapillary.Viewer({
-    accessToken: 'MLY|4142433049200173|72206abe5035850d6743b23a49c41333',
+    accessToken: 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b',
     container: 'mly',
   });
 
@@ -59,7 +59,7 @@
     // Add Mapillary Green Lines (Vector Source)
     map.addSource('mapillary', {
       type: 'vector',
-      tiles: ['https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=MLY|4142433049200173|72206abe5035850d6743b23a49c41333'],
+      tiles: ['https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b'],
       minzoom: 6,
       maxzoom: 14
     });
@@ -73,10 +73,6 @@
       paint: { 'line-opacity': 0.6, 'line-color': 'rgb(53, 175, 109)', 'line-width': 3 }
     });
 
-    // Change cursor on hover
-    map.on('mouseenter', 'mapillary', () => { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', 'mapillary', () => { map.getCanvas().style.cursor = ''; });
-
     // Handle Map Clicks
     map.on('click', (e) => {
       // Find the nearest image within 100 meters
@@ -88,6 +84,8 @@
     mly.on('image', (event) => {
       const lngLat = event.image.lngLat;
       marker.setLngLat([lngLat.lng, lngLat.lat]).addTo(map);
+      // Optional: Smoothly fly the map to the image location
+      map.easeTo({ center: [lngLat.lng, lngLat.lat] });
     });
   });
 
