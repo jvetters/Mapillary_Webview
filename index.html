@@ -38,7 +38,7 @@
     center: [-87.622088, 41.878781] 
   });
 
-  // Initialize Viewer using v3 syntax
+  // Initialize Viewer with your Client Token
   const mly = new mapillary.Viewer({
     accessToken: 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b',
     container: 'mly',
@@ -53,6 +53,7 @@
       minzoom: 6, maxzoom: 14
     });
 
+    // We focus on the "image" bubbles for precise clicking
     map.addLayer({
       id: 'mapillary-points',
       type: 'circle',
@@ -61,20 +62,18 @@
       paint: { 'circle-radius': 6, 'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' }
     });
 
+    // When a bubble is clicked, get its ID and move the viewer
     map.on('click', 'mapillary-points', (e) => {
-      // Get the specific image ID from the clicked bubble
       const imageId = e.features[0].properties.id;
-      
-      // Tell the viewer to load this exact ID
       mly.moveToKey(imageId)
         .catch(err => console.error("Error loading image ID:", imageId, err));
     });
 
+    // Update the red map marker when the photo changes
     mly.on('nodechanged', (node) => {
       marker.setLngLat([node.latLon.lon, node.latLon.lat]).addTo(map);
     });
 
-    // Cursor change on hover
     map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', 'mapillary-points', () => { map.getCanvas().style.cursor = ''; });
   });
