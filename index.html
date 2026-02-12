@@ -2,16 +2,19 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Mapillary - Project Tracker</title>
+<title>Mapillary - Final Stable View</title>
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="referrer" content="no-referrer-when-downgrade">
+
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+
 <style>
   body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: sans-serif; }
-  #map { flex: 1; width: 100%; }
-  #mly-container { height: 40%; width: 100%; border-top: 5px solid #35af6d; background: #000; }
+  #map { flex: 1; width: 100%; background: #eee; } /* Light grey background while map loads */
+  #mly-container { height: 40%; width: 100%; border-top: 5px solid #35af6d; background: #000; position: relative; }
   iframe { width: 100%; height: 100%; border: none; }
+  
   .filter-ctrl {
     position: absolute; top: 10px; left: 10px; z-index: 10;
     background: white; padding: 12px; border-radius: 8px;
@@ -28,9 +31,9 @@
 <div class="filter-ctrl">
   <div class="input-row">
     <input type="text" id="user-input" placeholder="jvetters" value="jvetters">
-    <button onclick="applyUserFilter()">Filter Map</button>
+    <button onclick="applyFilter()">Filter Map</button>
   </div>
-  <div id="filter-status" class="status">Loading...</div>
+  <div id="filter-status" class="status">Initializing project data...</div>
 </div>
 
 <div id="map"></div>
@@ -46,10 +49,67 @@
     container: 'map',
     style: 'mapbox://styles/mapbox/streets-v11',
     zoom: 12,
-    center: [-89.9449, 34.3085] 
+    center: [-89.9449, 34.3085] // Batesville, MS
   });
 
   map.on('load', () => {
+    // 1. Load the Mapillary Global Source ONCE
     map.addSource('mapillary', {
       type: 'vector',
-      tiles: [`
+      tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`]
+    });
+
+    // 2. Continuous Lines Layer
+    map.addLayer({
+      id: 'mapillary-lines',
+      type: 'line',
+      source: 'mapillary',
+      'source-layer': 'sequence',
+      paint: { 'line-color': '#35af6d', 'line-width': 2.5, 'line-opacity': 0.7 }
+    });
+
+    // 3. Precision Bubbles Layer
+    map.addLayer({
+      id: 'mapillary-points',
+      type: 'circle',
+      source: 'mapillary',
+      'source-layer': 'image',
+      minzoom: 10,
+      paint: { 'circle-radius': 6, 'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' }
+    });
+
+    applyFilter(); // Initial lock to jvetters
+  });
+
+  function applyFilter() {
+    const user = document.getElementById('user-input').value.trim();
+    const status = document.getElementById('filter-status');
+    
+    if (user === "") {
+      // Remove filters to show all public data
+      map.setFilter('mapillary-lines', null);
+      map.setFilter('mapillary-points', null);
+      status.innerText = "Showing all public imagery";
+    } else {
+      // Strict data filter for your captures
+      const userFilter = ['==', ['get', 'creator_username'], user];
+      map.setFilter('mapillary-lines', userFilter);
+      map.setFilter('mapillary-points', userFilter);
+      status.innerText = `Locked to captures by: ${user}`;
+    }
+  }
+
+  map.on('click', (e) => {
+    const features = map.queryRenderedFeatures(e.point, { layers: ['mapillary-points', 'mapillary-lines'] });
+    if (features.length > 0) {
+      const imageId = features[0].properties.id;
+      const user = document.getElementById('user-input').value.trim();
+      // Synchronize the viewer with the filtered user
+      const newUrl = `https://www.mapillary.com/embed?image_key=${imageId}&style=photo&menu=false${user ? '&username=' + user : ''}`;
+      document.getElementById('mly-frame').src = newUrl;
+    }
+  });
+
+  map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
+  map.on('mouseleave', 'mapillary-points', () => { map.getCanvas().style.cursor = ''; });
+</
