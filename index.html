@@ -2,19 +2,34 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Mapillary - Filtered for jvetters</title>
+<title>Mapillary - Dynamic User Filter</title>
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="referrer" content="no-referrer-when-downgrade">
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 <style>
-  body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
+  body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: sans-serif; }
   #map { flex: 1; width: 100%; }
   #mly-container { height: 40%; width: 100%; border-top: 5px solid #35af6d; background: #000; }
   iframe { width: 100%; height: 100%; border: none; }
+  
+  /* Filter UI */
+  .filter-ctrl {
+    position: absolute; top: 10px; left: 10px; z-index: 1;
+    background: white; padding: 10px; border-radius: 4px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2); display: flex; gap: 5px;
+  }
+  input { padding: 5px; border: 1px solid #ccc; border-radius: 3px; }
+  button { padding: 5px 10px; background: #35af6d; color: white; border: none; border-radius: 3px; cursor: pointer; }
 </style>
 </head>
 <body>
+
+<div class="filter-ctrl">
+  <input type="text" id="user-input" placeholder="Enter username (e.g. jvetters)">
+  <button onclick="updateFilter()">Filter</button>
+</div>
+
 <div id="map"></div>
 <div id="mly-container">
   <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo"></iframe>
@@ -31,46 +46,46 @@
     center: [-89.988, 34.312] 
   });
 
-  map.on('load', () => {
-    // We append &creator_username=jvetters to the tiles URL to pre-filter the data
-    const filteredTiles = `https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}&creator_username=jvetters`;
+  function updateFilter() {
+    const user = document.getElementById('user-input').value;
+    // Mapillary Vector Tiles use creator_username for simple filtering
+    const newTiles = `https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}${user ? '&creator_username=' + user : ''}`;
+    
+    // Update the existing source with the new tile URL
+    if (map.getSource('mapillary')) {
+      map.removeLayer('mapillary-points');
+      map.removeLayer('mapillary-lines');
+      map.removeSource('mapillary');
+    }
+    
+    addMapillarySource(newTiles);
+  }
 
-    map.addSource('mapillary', {
-      type: 'vector',
-      tiles: [filteredTiles],
-      minzoom: 0,
-      maxzoom: 14
-    });
+  function addMapillarySource(tileUrl) {
+    map.addSource('mapillary', { type: 'vector', tiles: [tileUrl] });
 
-    // Line Layer for your user sequences
     map.addLayer({
       id: 'mapillary-lines',
       type: 'line',
       source: 'mapillary',
       'source-layer': 'sequence',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 
-        'line-opacity': 0.8, 
-        'line-color': '#35af6d', 
-        'line-width': 3 
-      }
+      paint: { 'line-opacity': 0.8, 'line-color': '#35af6d', 'line-width': 3 }
     });
 
-    // Bubble Layer for your user image points
     map.addLayer({
       id: 'mapillary-points',
       type: 'circle',
       source: 'mapillary',
       'source-layer': 'image',
       minzoom: 13, 
-      paint: { 
-        'circle-radius': 8, 
-        'circle-color': '#35af6d', 
-        'circle-stroke-width': 2, 
-        'circle-stroke-color': '#fff' 
-      }
+      paint: { 'circle-radius': 8, 'circle-color': '#35af6d', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' }
     });
+  }
 
+  map.on('load', () => {
+    updateFilter(); // Load default view initially
+    
     map.on('click', (e) => {
       const features = map.queryRenderedFeatures(e.point, { layers: ['mapillary-points', 'mapillary-lines'] });
       if (features.length > 0) {
@@ -79,9 +94,6 @@
         document.getElementById('mly-frame').src = newUrl;
       }
     });
-
-    map.on('mouseenter', 'mapillary-lines', () => { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', 'mapillary-lines', () => { map.getCanvas().style.cursor = ''; });
   });
 
   map.addControl(new mapboxgl.NavigationControl());
