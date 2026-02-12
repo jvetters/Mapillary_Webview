@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Mapillary - Dynamic User Filter</title>
+<title>Mapillary - Project Tracker</title>
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="referrer" content="no-referrer-when-downgrade">
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
@@ -12,21 +12,20 @@
   #map { flex: 1; width: 100%; }
   #mly-container { height: 40%; width: 100%; border-top: 5px solid #35af6d; background: #000; }
   iframe { width: 100%; height: 100%; border: none; }
-  
-  /* Filter UI */
   .filter-ctrl {
-    position: absolute; top: 10px; left: 10px; z-index: 1;
-    background: white; padding: 10px; border-radius: 4px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.2); display: flex; gap: 5px;
+    position: absolute; top: 10px; left: 10px; z-index: 10;
+    background: white; padding: 12px; border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; gap: 8px;
   }
-  input { padding: 5px; border: 1px solid #ccc; border-radius: 3px; }
-  button { padding: 5px 10px; background: #35af6d; color: white; border: none; border-radius: 3px; cursor: pointer; }
+  input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 150px; }
+  button { padding: 8px 15px; background: #35af6d; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+  button:hover { background: #2d945b; }
 </style>
 </head>
 <body>
 
 <div class="filter-ctrl">
-  <input type="text" id="user-input" placeholder="Enter username (e.g. jvetters)">
+  <input type="text" id="user-input" placeholder="jvetters" value="jvetters">
   <button onclick="updateFilter()">Filter</button>
 </div>
 
@@ -41,59 +40,60 @@
 
   const map = new mapboxgl.Map({
     container: 'map',
-    style: 'mapbox://styles/mapbox/streets-v11',
-    zoom: 12,
-    center: [-89.988, 34.312] 
+    style: 'mapbox://styles/mapbox/streets-v12',
+    zoom: 13,
+    center: [-89.988, 34.312] // Centered on your Batesville project area
   });
 
   function updateFilter() {
-    const user = document.getElementById('user-input').value;
-    // Mapillary Vector Tiles use creator_username for simple filtering
+    const user = document.getElementById('user-input').value.trim();
+    // Rebuild the tile URL with a strict username filter
     const newTiles = `https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}${user ? '&creator_username=' + user : ''}`;
     
-    // Update the existing source with the new tile URL
     if (map.getSource('mapillary')) {
       map.removeLayer('mapillary-points');
       map.removeLayer('mapillary-lines');
       map.removeSource('mapillary');
     }
     
-    addMapillarySource(newTiles);
-  }
+    map.addSource('mapillary', { type: 'vector', tiles: [newTiles] });
 
-  function addMapillarySource(tileUrl) {
-    map.addSource('mapillary', { type: 'vector', tiles: [tileUrl] });
-
+    // 1. Line layer for project overview
     map.addLayer({
       id: 'mapillary-lines',
       type: 'line',
       source: 'mapillary',
       'source-layer': 'sequence',
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-opacity': 0.8, 'line-color': '#35af6d', 'line-width': 3 }
+      paint: { 'line-opacity': 0.8, 'line-color': '#35af6d', 'line-width': 4 }
     });
 
+    // 2. Point layer for precise clicking
     map.addLayer({
       id: 'mapillary-points',
       type: 'circle',
       source: 'mapillary',
       'source-layer': 'image',
-      minzoom: 13, 
+      minzoom: 12, 
       paint: { 'circle-radius': 8, 'circle-color': '#35af6d', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' }
     });
   }
 
   map.on('load', () => {
-    updateFilter(); // Load default view initially
+    updateFilter(); 
     
     map.on('click', (e) => {
+      // Specifically query only the filtered layers
       const features = map.queryRenderedFeatures(e.point, { layers: ['mapillary-points', 'mapillary-lines'] });
+      
       if (features.length > 0) {
         const imageId = features[0].properties.id;
         const newUrl = `https://www.mapillary.com/embed?image_key=${imageId}&style=photo`;
         document.getElementById('mly-frame').src = newUrl;
       }
     });
+
+    map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'mapillary-points', () => { map.getCanvas().style.cursor = ''; });
   });
 
   map.addControl(new mapboxgl.NavigationControl());
