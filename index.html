@@ -7,7 +7,7 @@
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 <style>
-  body { margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; overflow: hidden; }
+  body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background: #f4f4f4; overflow: hidden; }
   #mly-container { position: absolute; top: 0; bottom: 0; left: 0; width: 50%; background: #000; border-right: 2px solid #35af6d; }
   #map-container { position: absolute; top: 0; bottom: 0; right: 0; width: 50%; }
   #map { width: 100%; height: 100%; }
@@ -31,9 +31,9 @@
 </div>
 
 <script>
-  // Step 1: Find the client ID from the URL (e.g., ?id=MSDOT)
+  // Step 1: Detect Client Folder from URL
   const urlParams = new URLSearchParams(window.location.search);
-  const clientID = urlParams.get('id') || 'MSDOT'; 
+  const clientID = urlParams.get('id') || 'MSDOT'; // Defaults to MSDOT if no ?id= is used
   
   let config = {};
   mapboxgl.accessToken = 'pk.eyJ1IjoianZldHRlcnMiLCJhIjoiY21sazFhdDg5MDV3dDNlcTI3aXlwejIwaSJ9.ecEavihruz0TZguVQvRiVg';
@@ -47,15 +47,15 @@
     return colour;
   }
 
-  // Step 2: Load config.json from the correct folder
+  // Step 2: Fetch config.json from the client folder
   async function loadConfig() {
     try {
       const response = await fetch(`./${clientID}/config.json`);
-      if (!response.ok) throw new Error();
+      if (!response.ok) throw new Error("Config not found");
       config = await response.json();
       initMap();
     } catch (e) {
-      console.error("Critical: Could not find config.json in folder:", clientID);
+      console.error("Critical Error: Map cannot load without a valid config.json in the folder:", clientID);
     }
   }
 
@@ -68,13 +68,14 @@
     });
 
     map.on('load', () => {
+      // Load Mapillary
       map.addSource('mapillary', { 
         type: 'vector', 
         tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`], 
         maxzoom: 17 
       });
 
-      // Load Client Points using filename from config
+      // Load Static Points from MSDOT folder
       if (config.pointsFile) {
         map.addSource('live-points', { type: 'geojson', data: `./${clientID}/${config.pointsFile}` });
         map.addLayer({ 
@@ -85,7 +86,7 @@
         });
       }
 
-      // Load Client Polygons using filename from config
+      // Load Polygons from MSDOT folder
       if (config.polygonFile) {
         fetch(`./${clientID}/${config.polygonFile}`)
           .then(res => res.json())
@@ -116,7 +117,6 @@
               paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 17, 8], 'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' } 
             });
 
-            // Auto-zoom logic
             const bounds = new mapboxgl.LngLatBounds();
             data.features.forEach(f => {
               if (f.geometry && f.geometry.coordinates) {
@@ -129,21 +129,7 @@
       }
     });
 
-    // Date Filter logic
+    // Date Filter Logic
     window.applyDateFilter = () => {
       const fromTs = document.getElementById('date-from').value ? new Date(document.getElementById('date-from').value).getTime() : 0;
-      const toTs = document.getElementById('date-to').value ? new Date(document.getElementById('date-to').value).getTime() : Date.now();
-      const filter = ['all', ['>=', ['get', 'captured_at'], fromTs], ['<=', ['get', 'captured_at'], toTs]];
-      if (map.getLayer('mapillary-lines')) map.setFilter('mapillary-lines', filter);
-      if (map.getLayer('mapillary-points')) map.setFilter('mapillary-points', filter);
-    };
-
-    map.on('click', 'mapillary-points', (e) => {
-      document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${e.features[0].properties.id}&style=photo&menu=false`;
-    });
-    map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
-  }
-  loadConfig();
-</script>
-</body>
-</html>
+      const toTs = document.getElementById('date-to').value ? new Date(document.getElementById('date-to').value).getTime()
