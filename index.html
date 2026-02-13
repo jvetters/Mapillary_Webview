@@ -29,29 +29,19 @@
   button:hover { background: #2d965d; }
   
   #download-btn { background: #2c3e50; margin-top: 5px; }
+  #download-btn:hover { background: #1a252f; }
 
   .legend-container { margin-top: 5px; display: flex; flex-direction: column; gap: 4px; }
   .legend-item { display: flex; align-items: center; font-size: 11px; color: #444; font-weight: bold; }
   .legend-key { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; border: 1px solid #fff; }
 
   .mapboxgl-ctrl-geocoder { min-width: 250px; border: 1px solid #35af6d; }
-
-  /* Directional Cone Style - Native Viewer */
-  .selection-cone {
-    width: 0; height: 0;
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-bottom: 16px solid #ff9f43; 
-    filter: drop-shadow(0 0 1px rgba(0,0,0,0.5));
-    pointer-events: none;
-    z-index: 5;
-  }
 </style>
 </head>
 <body>
 
 <div id="mly-container">
-  <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false&publish=true"></iframe>
+  <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false"></iframe>
 </div>
 
 <div id="map-container">
@@ -83,11 +73,9 @@
 </div>
 
 <script>
-  // Inserted your provided token
   mapboxgl.accessToken = 'pk.eyJ1IjoianZldHRlcnMiLCJhIjoiY21sazFhdDg5MDV3dDNlcTI3aXlwejIwaSJ9.ecEavihruz0TZguVQvRiVg';
   const mlyToken = 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b';
   let currentImageKey = null;
-  let activeMarker = null; 
   let selectedPointId = null;
 
   const map = new mapboxgl.Map({
@@ -171,22 +159,9 @@
     applyDateFilter();
   });
 
-  // HANDSHAKE LISTENER FOR REAL-TIME SYNC
-  window.addEventListener('message', (event) => {
-    if (event.origin !== 'https://www.mapillary.com') return;
-    try {
-        const data = (typeof event.data === 'string') ? JSON.parse(event.data) : event.data;
-        if (activeMarker && (data.type === 'bearing' || data.type === 'mly.bearing')) {
-            activeMarker.setRotation(data.value); 
-        }
-    } catch (e) {}
-  });
-
   map.on('click', 'mapillary-points', (e) => {
     const feature = e.features[0];
     currentImageKey = feature.properties.id;
-    const coords = feature.geometry.coordinates;
-    const initialAngle = feature.properties.compass_angle || 0;
 
     if (selectedPointId !== null) {
       map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: false });
@@ -194,21 +169,7 @@
     selectedPointId = feature.id;
     map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: true });
 
-    if (activeMarker) activeMarker.remove();
-    const el = document.createElement('div');
-    el.className = 'selection-cone';
-    activeMarker = new mapboxgl.Marker({ element: el, rotation: initialAngle, rotationAlignment: 'map' })
-      .setLngLat(coords)
-      .addTo(map);
-
-    const frame = document.getElementById('mly-frame');
-    frame.src = `https://www.mapillary.com/embed?image_key=${currentImageKey}&style=photo&menu=false&publish=true`;
-    
-    // Explicit Handshake Subscription
-    frame.onload = () => {
-        const msg = JSON.stringify({type: 'mly.subscribe', value: 'bearing'});
-        frame.contentWindow.postMessage(msg, 'https://www.mapillary.com');
-    };
+    document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${currentImageKey}&style=photo&menu=false`;
   });
 
   map.on('click', 'debris-layer', (e) => {
@@ -224,7 +185,6 @@
     const filter = ['all', ['>=', ['get', 'captured_at'], fromTs], ['<=', ['get', 'captured_at'], toTs]];
     if (map.getLayer('mapillary-lines')) map.setFilter('mapillary-lines', filter);
     if (map.getLayer('mapillary-points')) map.setFilter('mapillary-points', filter);
-    if (activeMarker) activeMarker.remove(); 
   }
 
   function applyDebrisFilter() {
@@ -250,7 +210,7 @@
         a.remove();
         window.URL.revokeObjectURL(downloadUrl);
       }
-    } catch (err) { alert("Download security block. Right-click the image in the viewer to save."); }
+    } catch (err) { alert("Download failed. Right-click the image in the viewer to save."); }
   }
 
   map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
