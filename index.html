@@ -38,7 +38,7 @@
   });
 
   map.on('load', () => {
-    // 1. RESTORE MAPILLARY DATA (Lines and Bubbles)
+    // 1. RESTORE MAPILLARY DATA
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
@@ -82,9 +82,8 @@
             'fill-opacity': 0.1, 
             'fill-outline-color': '#000' 
           }
-        }, 'mapillary-lines'); // Polygons sit behind Mapillary lines
+        }, 'mapillary-lines');
 
-        // Auto-zoom to counties
         const bounds = new mapboxgl.LngLatBounds();
         data.features.forEach(f => {
           if (f.geometry && f.geometry.coordinates) {
@@ -102,8 +101,6 @@
     document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${imgID}&style=photo&menu=false`;
   });
 
-  map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
-  map.on('mouseleave', 'mapillary-points', () => { map.getCanvas().style.cursor = ''; });
   map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
 </script>
 </body>
