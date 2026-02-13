@@ -2,39 +2,24 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Vetted Analytics - Project Portal</title>
+<title>Vetted Analytics - Live Portal</title>
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 <style>
-  body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background: #f4f4f4; overflow: hidden; }
+  body { margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; overflow: hidden; }
   #mly-container { position: absolute; top: 0; bottom: 0; left: 0; width: 50%; background: #000; border-right: 2px solid #35af6d; }
   #map-container { position: absolute; top: 0; bottom: 0; right: 0; width: 50%; }
   #map { width: 100%; height: 100%; }
   iframe { width: 100%; height: 100%; border: none; }
-  .controls {
-    position: absolute; top: 15px; right: 15px; z-index: 10;
-    background: white; padding: 12px; border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 180px;
-    display: flex; flex-direction: column; gap: 8px;
-  }
-  label { font-size: 10px; font-weight: bold; color: #666; text-transform: uppercase; }
-  input { padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
-  button { padding: 10px; background: #35af6d; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+  .controls { position: absolute; top: 15px; right: 15px; z-index: 10; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 180px; display: flex; flex-direction: column; gap: 8px; }
 </style>
 </head>
 <body>
 
-<div id="mly-container">
-  <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false"></iframe>
-</div>
-
+<div id="mly-container"><iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false"></iframe></div>
 <div id="map-container">
   <div class="controls">
-    <label>From Date</label>
-    <input type="date" id="date-from">
-    <label>To Date</label>
-    <input type="date" id="date-to">
     <button onclick="applyDateFilter()">Filter Road Runs</button>
   </div>
   <div id="map"></div>
@@ -45,20 +30,8 @@
   mapboxgl.accessToken = 'pk.eyJ1IjoianZldHRlcnMiLCJhIjoiY21sazFhdDg5MDV3dDNlcTI3aXlwejIwaSJ9.ecEavihruz0TZguVQvRiVg';
   const mlyToken = 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b';
 
-  const stringToColour = (str) => {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
-    let colour = '#';
-    for (let i = 0; i < 3; i++) {
-      let value = (hash >> (i * 8)) & 0xFF;
-      colour += ('00' + value.toString(16)).substr(-2);
-    }
-    return colour;
-  }
-
   async function loadConfig() {
     try {
-      // Look for config in the new MSDOT folder
       const response = await fetch('./MSDOT/config.json');
       if (response.ok) {
         const config = await response.json();
@@ -86,64 +59,48 @@
     });
 
     map.on('load', () => {
+      // 1. ADD MAPILLARY
       map.addSource('mapillary', {
         type: 'vector',
         tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
         maxzoom: 17
       });
 
+      // 2. LOAD LIVE POINTS (Improved Logic)
       if (pointsString) {
-        pointsString.split(',').forEach((layerID, index) => {
-          const arcgisUrl = `https://services.arcgis.com/${layerID}/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson&outSR=4326`;
-          map.addSource(`points-${index}`, { type: 'geojson', data: arcgisUrl });
-          map.addLayer({
-            id: `pt-layer-${index}`,
-            type: 'circle',
-            source: `points-${index}`,
-            paint: { 'circle-radius': 6, 'circle-color': stringToColour(layerID), 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' }
-          });
+        console.log("Attempting to load ArcGIS points from:", pointsString);
+        map.addSource('live-points', {
+          type: 'geojson',
+          data: pointsString
+        });
+
+        map.addLayer({
+          id: 'live-points-layer',
+          type: 'circle',
+          source: 'live-points',
+          paint: {
+            'circle-radius': 8,
+            'circle-color': '#FFFF00', // NEON YELLOW
+            'circle-stroke-width': 3,
+            'circle-stroke-color': '#000'
+          }
         });
       }
 
+      // 3. LOAD COUNTIES
       if (projectID) {
-        // Pointing to the new MSDOT folder path
         fetch(`./MSDOT/${projectID}.json`)
           .then(res => res.json())
           .then(data => {
-            data.features.forEach(f => f.properties.dynamicColor = stringToColour(f.properties.Name || "default"));
             map.addSource('client-data', { type: 'geojson', data: data });
-
             map.addLayer({
               id: 'county-fills',
               type: 'fill',
               source: 'client-data',
-              paint: { 'fill-color': ['get', 'dynamicColor'], 'fill-opacity': 0.15, 'fill-outline-color': 'rgba(0,0,0,0.1)' }
-            });
+              paint: { 'fill-color': '#888', 'fill-opacity': 0.1, 'fill-outline-color': '#000' }
+            }, 'live-points-layer'); // Ensure points stay on top
 
-            map.addLayer({
-              id: 'mapillary-lines',
-              type: 'line',
-              source: 'mapillary',
-              'source-layer': 'sequence',
-              paint: { 'line-color': '#35af6d', 'line-width': 2, 'line-opacity': 0.7 }
-            });
-
-            map.addLayer({
-              id: 'mapillary-points',
-              type: 'circle',
-              source: 'mapillary',
-              'source-layer': 'image',
-              paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 17, 8], 'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' }
-            });
-
-            map.addLayer({
-              id: 'county-labels',
-              type: 'symbol',
-              source: 'client-data',
-              layout: { 'text-field': ['get', 'Name'], 'text-size': 11, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'] },
-              paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 1.5 }
-            });
-
+            // Zoom to fit data
             const bounds = new mapboxgl.LngLatBounds();
             data.features.forEach(f => {
               if (f.geometry && f.geometry.coordinates) {
@@ -156,18 +113,8 @@
       }
     });
 
-    window.applyDateFilter = function() {
-      const fromTs = document.getElementById('date-from').value ? new Date(document.getElementById('date-from').value).getTime() : 0;
-      const toTs = document.getElementById('date-to').value ? new Date(document.getElementById('date-to').value).getTime() : Date.now();
-      const filter = ['all', ['>=', ['get', 'captured_at'], fromTs], ['<=', ['get', 'captured_at'], toTs]];
-      if (map.getLayer('mapillary-lines')) map.setFilter('mapillary-lines', filter);
-      if (map.getLayer('mapillary-points')) map.setFilter('mapillary-points', filter);
-    }
-
-    map.on('click', 'mapillary-points', (e) => {
-      document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${e.features[0].properties.id}&style=photo&menu=false`;
-    });
-    map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+    // Error handling log
+    map.on('error', (e) => { console.error("Mapbox error:", e.error.message); });
   }
 
   loadConfig();
