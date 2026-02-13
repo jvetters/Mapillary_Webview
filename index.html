@@ -38,13 +38,14 @@
   });
 
   map.on('load', () => {
-    // 1. ADD MAPILLARY DATA (Lines and Bubbles)
+    // 1. RESTORE MAPILLARY DATA (Lines and Bubbles)
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
       maxzoom: 17
     });
 
+    // Mapillary lines
     map.addLayer({
       id: 'mapillary-lines',
       type: 'line',
@@ -53,6 +54,7 @@
       paint: { 'line-color': '#35af6d', 'line-width': 2, 'line-opacity': 0.7 }
     });
 
+    // Mapillary clickable bubbles
     map.addLayer({
       id: 'mapillary-points',
       type: 'circle',
@@ -66,7 +68,7 @@
       }
     });
 
-    // 2. ADD MSDOT COUNTY POLYGONS
+    // 2. RESTORE MSDOT COUNTY POLYGONS
     fetch('./MSDOT/Mississippi_Counties.json')
       .then(res => res.json())
       .then(data => {
