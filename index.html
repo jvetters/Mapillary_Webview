@@ -36,7 +36,7 @@
 
   .mapboxgl-ctrl-geocoder { min-width: 250px; border: 1px solid #35af6d; }
 
-  /* Directional Cone - Half Size */
+  /* Directional Cone */
   .selection-cone {
     width: 0; height: 0;
     border-left: 8px solid transparent;
@@ -51,7 +51,7 @@
 <body>
 
 <div id="mly-container">
-  <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false"></iframe>
+  <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false&publish=true"></iframe>
 </div>
 
 <div id="map-container">
@@ -133,7 +133,6 @@
         'source-layer': 'image', 
         paint: { 
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1, 10, 2.5, 14, 6, 22, 18], 
-            // Bubble Highlighting
             'circle-color': ['case', ['boolean', ['feature-state', 'selected'], false], '#ff9f43', '#35af6d'],
             'circle-stroke-width': ['case', ['boolean', ['feature-state', 'selected'], false], 3, 1],
             'circle-stroke-color': '#fff' 
@@ -171,13 +170,16 @@
     applyDateFilter();
   });
 
-  // Listener for Mapillary View Rotation
+  // UPDATED: Sync listener for Mapillary rotation
   window.addEventListener('message', (event) => {
     if (event.origin !== 'https://www.mapillary.com') return;
     try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'bearing' && activeMarker) {
-            activeMarker.setRotation(data.value); // Syncs Cone with Viewer
+        const data = (typeof event.data === 'string') ? JSON.parse(event.data) : event.data;
+        // Mapillary embed events often use 'mly.bearing' or just 'bearing' depending on version
+        if (data.type === 'mly.bearing' || data.type === 'bearing') {
+            if (activeMarker) {
+                activeMarker.setRotation(data.value); // Real-time sync
+            }
         }
     } catch (e) {}
   });
@@ -188,14 +190,12 @@
     const coords = feature.geometry.coordinates;
     const initialAngle = feature.properties.compass_angle || 0;
 
-    // Reset Highlighting
     if (selectedPointId !== null) {
       map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: false });
     }
     selectedPointId = feature.id;
     map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: true });
 
-    // Update Cone
     if (activeMarker) activeMarker.remove();
     const el = document.createElement('div');
     el.className = 'selection-cone';
@@ -203,7 +203,8 @@
       .setLngLat(coords)
       .addTo(map);
 
-    document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${currentImageKey}&style=photo&menu=false&bearing=true`;
+    // Added publish=true to enable event broadcasting
+    document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${currentImageKey}&style=photo&menu=false&publish=true`;
   });
 
   map.on('click', 'debris-layer', (e) => {
