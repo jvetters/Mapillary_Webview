@@ -13,7 +13,6 @@
   #map { width: 100%; height: 100%; }
   iframe { width: 100%; height: 100%; border: none; }
 
-  /* Date Filter UI */
   .controls {
     position: absolute; top: 15px; right: 15px; z-index: 10;
     background: white; padding: 12px; border-radius: 8px;
@@ -44,15 +43,15 @@
 </div>
 
 <script>
-  const urlParams = new URLSearchParams(window.location.search);
-  const projectID = urlParams.get('id') || 'Mississippi_Counties'; 
+  // Pointing to your actual GitHub folder name
+  const clientID = "MSDOT"; 
 
   mapboxgl.accessToken = 'pk.eyJ1IjoianZldHRlcnMiLCJhIjoiY21sazFhdDg5MDV3dDNlcTI3aXlwejIwaSJ9.ecEavihruz0TZguVQvRiVg';
   const mlyToken = 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b';
 
   const map = new mapboxgl.Map({
     container: 'map',
-    style: 'mapbox://styles/mapbox/light-v11', // Reverted to Light map
+    style: 'mapbox://styles/mapbox/light-v11',
     zoom: 6,
     center: [-89.3985, 32.3547],
     maxZoom: 17
@@ -70,13 +69,33 @@
   }
 
   map.on('load', () => {
+    // 1. MAPILLARY DATA
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
       maxzoom: 17
     });
 
-    fetch(`./data/${projectID}.json`)
+    // 2. DEBRIS POINTS (Red Dots)
+    map.addSource('debris-points', {
+      type: 'geojson',
+      data: `./${clientID}/Debris_Points.json`
+    });
+
+    map.addLayer({
+      id: 'debris-layer',
+      type: 'circle',
+      source: 'debris-points',
+      paint: {
+        'circle-radius': 7,
+        'circle-color': '#e74c3c',
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#fff'
+      }
+    });
+
+    // 3. COUNTY POLYGONS (Multi-Colored)
+    fetch(`./${clientID}/Mississippi_Counties.json`)
       .then(res => res.json())
       .then(data => {
         data.features.forEach(f => {
@@ -84,7 +103,6 @@
         });
         map.addSource('client-data', { type: 'geojson', data: data });
 
-        // Base Counties (Transparent)
         map.addLayer({
           id: 'county-fills',
           type: 'fill',
@@ -94,18 +112,17 @@
             'fill-opacity': 0.15,
             'fill-outline-color': 'rgba(0,0,0,0.1)'
           }
-        });
+        }, 'debris-layer'); // Keeps debris dots on top
 
-        // Mapillary Coverage (The road runs)
+        // 4. MAPILLARY INTERACTIVE LAYERS
         map.addLayer({
           id: 'mapillary-lines',
           type: 'line',
           source: 'mapillary',
           'source-layer': 'sequence',
           paint: { 'line-color': '#35af6d', 'line-width': 2, 'line-opacity': 0.7 }
-        });
+        }, 'debris-layer');
 
-        // Interactive Points
         map.addLayer({
           id: 'mapillary-points',
           type: 'circle',
@@ -119,19 +136,7 @@
           }
         });
 
-        // Dark labels for the light map
-        map.addLayer({
-          id: 'county-labels',
-          type: 'symbol',
-          source: 'client-data',
-          layout: {
-            'text-field': ['get', 'Name'],
-            'text-size': 11,
-            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold']
-          },
-          paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 1.5 }
-        });
-
+        // 5. AUTO-ZOOM TO DATA
         const bounds = new mapboxgl.LngLatBounds();
         data.features.forEach(f => {
           if (f.geometry && f.geometry.coordinates) {
@@ -143,22 +148,16 @@
       });
   });
 
-  // Date Filter Logic
   function applyDateFilter() {
-    const fromVal = document.getElementById('date-from').value;
-    const toVal = document.getElementById('date-to').value;
-    const fromTs = fromVal ? new Date(fromVal).getTime() : 0;
-    const toTs = toVal ? new Date(toVal).getTime() : Date.now();
-    
+    const fromTs = document.getElementById('date-from').value ? new Date(document.getElementById('date-from').value).getTime() : 0;
+    const toTs = document.getElementById('date-to').value ? new Date(document.getElementById('date-to').value).getTime() : Date.now();
     const filter = ['all', ['>=', ['get', 'captured_at'], fromTs], ['<=', ['get', 'captured_at'], toTs]];
-    
     if (map.getLayer('mapillary-lines')) map.setFilter('mapillary-lines', filter);
     if (map.getLayer('mapillary-points')) map.setFilter('mapillary-points', filter);
   }
 
   map.on('click', 'mapillary-points', (e) => {
-    const imgId = e.features[0].properties.id;
-    document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${imgId}&style=photo&menu=false`;
+    document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${e.features[0].properties.id}&style=photo&menu=false`;
   });
 
   map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
