@@ -2,16 +2,20 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Mapillary Tracker - Locked Zoom</title>
+<title>Mapillary Tracker - Stable Locked Zoom</title>
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 <style>
+  /* Flexbox is the most stable way to prevent "blank" maps */
   body { margin: 0; padding: 0; display: flex; height: 100vh; width: 100vw; overflow: hidden; font-family: sans-serif; }
+  
   #mly-container { width: 50%; height: 100%; background: #000; border-right: 2px solid #35af6d; box-sizing: border-box; }
   iframe { width: 100%; height: 100%; border: none; }
+
   #map-container { width: 50%; height: 100%; position: relative; }
   #map { width: 100%; height: 100%; }
+
   .controls {
     position: absolute; top: 10px; right: 10px; z-index: 10;
     background: white; padding: 10px; border-radius: 8px;
@@ -44,13 +48,13 @@
   mapboxgl.accessToken = 'pk.eyJ1IjoianZldHRlcnMiLCJhIjoiY21sazFhdDg5MDV3dDNlcTI3aXlwejIwaSJ9.ecEavihruz0TZguVQvRiVg';
   const mlyToken = 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b';
 
+  // Initialize the map with a hard zoom lock
   const map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/mapbox/streets-v11',
     zoom: 12,
     center: [-89.9449, 34.3085],
-    // HARD LOCK: Map will not zoom past 17
-    maxZoom: 17 
+    maxZoom: 17 // This prevents zooming past where bubbles are visible
   });
 
   map.on('load', () => {
@@ -58,7 +62,7 @@
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
       minzoom: 0,
-      maxzoom: 17 // Data source matches the map lock
+      maxzoom: 17 // Synchronized with the map's max zoom
     });
 
     map.addLayer({
@@ -81,7 +85,7 @@
           0, 1,      
           10, 2,     
           14, 6,     
-          17, 12     // Maximum bubble size at the lock level
+          17, 12 // Maximum bubble size at the lock level
         ],
         'circle-color': '#35af6d', 
         'circle-stroke-width': 1, 
@@ -89,6 +93,7 @@
       }
     });
 
+    // Cursor pointer logic
     map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', 'mapillary-points', () => { map.getCanvas().style.cursor = ''; });
   });
@@ -97,4 +102,15 @@
     const fromVal = document.getElementById('date-from').value;
     const toVal = document.getElementById('date-to').value;
     const fromTs = fromVal ? new Date(fromVal).getTime() : 0;
-    const toTs = to
+    const toTs = toVal ? new Date(toVal).getTime() : Date.now();
+    
+    const filter = ['all', ['>=', ['get', 'captured_at'], fromTs], ['<=', ['get', 'captured_at'], toTs]];
+    
+    if (map.getLayer('mapillary-lines')) map.setFilter('mapillary-lines', filter);
+    if (map.getLayer('mapillary-points')) map.setFilter('mapillary-points', filter);
+  }
+
+  map.on('click', (e) => {
+    const features = map.queryRenderedFeatures(e.point, { layers: ['mapillary-points', 'mapillary-lines'] });
+    if (features.length > 0) {
+      const image
