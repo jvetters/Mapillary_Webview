@@ -27,9 +27,8 @@
 </div>
 
 <script>
-  // Static project IDs to ensure stability
+  // Fixed pathing for your MSDOT folder structure
   const projectID = "Mississippi_Counties"; 
-  // Paste your full ArcGIS Query URL between these quotes
   const pointsURL = "https://services7.arcgis.com/26dfc2b86e7494bb2265b06c906666d0/arcgis/rest/services/Debris_Points_view/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson";
 
   mapboxgl.accessToken = 'pk.eyJ1IjoianZldHRlcnMiLCJhIjoiY21sazFhdDg5MDV3dDNlcTI3aXlwejIwaSJ9.ecEavihruz0TZguVQvRiVg';
@@ -43,30 +42,28 @@
   });
 
   map.on('load', () => {
-    // 1. MAPILLARY DATA
+    // 1. Mapillary Layer
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
       maxzoom: 17
     });
 
-    // 2. LIVE ARCGIS POINTS
-    if (pointsURL) {
-      map.addSource('live-points', { type: 'geojson', data: pointsURL });
-      map.addLayer({
-        id: 'live-points-layer',
-        type: 'circle',
-        source: 'live-points',
-        paint: {
-          'circle-radius': 7,
-          'circle-color': '#e74c3c', // Red points
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#fff'
-        }
-      });
-    }
+    // 2. Live ArcGIS Points Layer
+    map.addSource('live-points', { type: 'geojson', data: pointsURL });
+    map.addLayer({
+      id: 'live-points-layer',
+      type: 'circle',
+      source: 'live-points',
+      paint: {
+        'circle-radius': 7,
+        'circle-color': '#e74c3c', // Red points for debris
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#fff'
+      }
+    });
 
-    // 3. COUNTY DATA (Fixed Path to MSDOT folder)
+    // 3. County Polygons - Corrected Folder Path
     fetch(`./MSDOT/${projectID}.json`)
       .then(res => res.json())
       .then(data => {
@@ -76,4 +73,26 @@
           type: 'fill',
           source: 'client-data',
           paint: { 'fill-color': '#35af6d', 'fill-opacity': 0.1, 'fill-outline-color': '#000' }
-        }, 'live-points-layer'); // Keeps points on top
+        }, 'live-points-layer'); // Ensures points stay on top
+
+        // Auto-zoom to the counties
+        const bounds = new mapboxgl.LngLatBounds();
+        data.features.forEach(f => {
+          if (f.geometry && f.geometry.coordinates) {
+            const coords = f.geometry.type === 'Polygon' ? f.geometry.coordinates[0] : f.geometry.coordinates;
+            coords.forEach(c => bounds.extend(Array.isArray(c[0]) ? c[0] : c));
+          }
+        });
+        map.fitBounds(bounds, { padding: 40 });
+      })
+      .catch(err => console.error("Error finding MSDOT data:", err));
+  });
+
+  function applyDateFilter() {
+    console.log("Date filter triggered");
+  }
+
+  map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+</script>
+</body>
+</html>
