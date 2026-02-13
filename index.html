@@ -1,50 +1,63 @@
-// ... (Keep Mapillary source and point/line layers as they are) ...
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Vetted Analytics - Project Portal</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+<style>
+  body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background: #1a1a1a; overflow: hidden; }
+  #mly-container { position: absolute; top: 0; bottom: 0; left: 0; width: 50%; background: #000; border-right: 3px solid #35af6d; }
+  #map-container { position: absolute; top: 0; bottom: 0; right: 0; width: 50%; }
+  #map { width: 100%; height: 100%; }
+  iframe { width: 100%; height: 100%; border: none; }
+</style>
+</head>
+<body>
 
-    fetch(`./data/${projectID}.json`)
-      .then(response => response.json())
-      .then(data => {
-        data.features.forEach(f => {
-          f.properties.dynamicColor = stringToColour(f.properties.Name || "default");
-        });
+<div id="mly-container">
+  <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false"></iframe>
+</div>
 
-        map.addSource('client-data', { type: 'geojson', data: data });
+<div id="map-container">
+  <div id="map"></div>
+</div>
 
-        // 1. ADD COUNTY FILLS FIRST (Bottom of the stack)
-        map.addLayer({
-          id: 'county-fills',
-          type: 'fill',
-          source: 'client-data',
-          paint: {
-            'fill-color': ['get', 'dynamicColor'],
-            'fill-opacity': 0.25, // Lower opacity (0.25) makes it more transparent
-            'fill-outline-color': 'rgba(255, 255, 255, 0.5)'
-          }
-        }, 'mapillary-points'); // CRITICAL: This places counties BELOW the bubbles
+<script>
+  const urlParams = new URLSearchParams(window.location.search);
+  const projectID = urlParams.get('id') || 'Mississippi_Counties'; 
 
-        // 2. ENSURE LINES ARE ON TOP
-        // If the lines are still hidden, we move them to the top of the stack
-        if (map.getLayer('mapillary-lines')) {
-            map.moveLayer('mapillary-lines'); 
-        }
+  mapboxgl.accessToken = 'pk.eyJ1IjoianZldHRlcnMiLCJhIjoiY21sazFhdDg5MDV3dDNlcTI3aXlwejIwaSJ9.ecEavihruz0TZguVQvRiVg';
+  const mlyToken = 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b';
 
-        // 3. ADD COUNTY NAME LABELS
-        map.addLayer({
-          id: 'county-labels',
-          type: 'symbol',
-          source: 'client-data',
-          layout: {
-            'text-field': ['get', 'Name'],
-            'text-size': 13,
-            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-            'text-justify': 'center'
-          },
-          paint: {
-            'text-color': '#ffffff',
-            'text-halo-color': '#000000',
-            'text-halo-width': 2,
-            'text-opacity': 0.8 // Slightly faded labels look more professional
-          }
-        });
+  const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/dark-v11', 
+    zoom: 6,
+    center: [-89.3985, 32.3547],
+    maxZoom: 17
+  });
 
-        // ... (Keep the existing Auto-Zoom bounds logic) ...
-      });
+  const stringToColour = (str) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
+    let colour = '#';
+    for (let i = 0; i < 3; i++) {
+      let value = (hash >> (i * 8)) & 0xFF;
+      colour += ('00' + value.toString(16)).substr(-2);
+    }
+    return colour;
+  }
+
+  map.on('idle', () => { map.resize(); });
+
+  map.on('load', () => {
+    // 1. ADD DATA SOURCES FIRST
+    map.addSource('mapillary', {
+      type: 'vector',
+      tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
+      maxzoom: 17
+    });
+
+    fetch(`./data/${projectID
