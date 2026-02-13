@@ -2,31 +2,17 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Mapillary Tracker - Always-On View</title>
+<title>Vetted Analytics - Project Portal</title>
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 <style>
   body { margin: 0; padding: 0; font-family: sans-serif; background: #1a1a1a; overflow: hidden; }
-  
-  /* Hard-coded positions to prevent rendering collapse */
-  #mly-container {
-    position: absolute; top: 0; bottom: 0; left: 0;
-    width: 50%; background: #000; border-right: 3px solid #35af6d;
-  }
-  #map-container {
-    position: absolute; top: 0; bottom: 0; right: 0;
-    width: 50%;
-  }
+  #mly-container { position: absolute; top: 0; bottom: 0; left: 0; width: 50%; background: #000; border-right: 3px solid #35af6d; }
+  #map-container { position: absolute; top: 0; bottom: 0; right: 0; width: 50%; }
   #map { width: 100%; height: 100%; }
   iframe { width: 100%; height: 100%; border: none; }
-
-  .controls {
-    position: absolute; top: 15px; right: 15px; z-index: 10;
-    background: white; padding: 12px; border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 180px;
-    display: flex; flex-direction: column; gap: 8px;
-  }
+  .controls { position: absolute; top: 15px; right: 15px; z-index: 10; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 180px; display: flex; flex-direction: column; gap: 8px; }
   label { font-size: 10px; font-weight: bold; color: #666; text-transform: uppercase; }
   input { padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
   button { padding: 10px; background: #35af6d; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
@@ -50,6 +36,10 @@
 </div>
 
 <script>
+  // 1. Identify the Client/Project ID from the URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const projectID = urlParams.get('id'); 
+
   mapboxgl.accessToken = 'pk.eyJ1IjoianZldHRlcnMiLCJhIjoiY21sazFhdDg5MDV3dDNlcTI3aXlwejIwaSJ9.ecEavihruz0TZguVQvRiVg';
   const mlyToken = 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b';
 
@@ -58,17 +48,16 @@
     style: 'mapbox://styles/mapbox/streets-v11',
     zoom: 12,
     center: [-89.9449, 34.3085],
-    maxZoom: 17 // Hard limit to keep bubbles visible
+    maxZoom: 17 
   });
 
-  // CRITICAL FIX: Forces map to redraw if it initializes at 0 width
-  map.on('idle', () => { map.resize(); });
+  map.on('idle', () => { map.resize(); }); // Fixes blank map issues
 
   map.on('load', () => {
+    // Mapillary Global Layers (Visible for all projects)
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
-      minzoom: 0,
       maxzoom: 17
     });
 
@@ -85,14 +74,39 @@
       type: 'circle',
       source: 'mapillary',
       'source-layer': 'image',
-      minzoom: 0, 
       paint: { 
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 1, 10, 2.5, 14, 6, 17, 12],
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2.5, 14, 6, 17, 12],
         'circle-color': '#35af6d', 
         'circle-stroke-width': 1, 
         'circle-stroke-color': '#fff' 
       }
     });
+
+    // 2. Load Client-Specific GeoJSON
+    if (projectID) {
+      map.addSource('client-data', {
+        type: 'geojson',
+        data: `./data/${projectID}.json` // Looks in your repo's /data folder
+      });
+
+      // Add Polygons (e.g., Debris Zones)
+      map.addLayer({
+        id: 'client-polygons',
+        type: 'fill',
+        source: 'client-data',
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': '#0080ff', 'fill-opacity': 0.3 }
+      });
+
+      // Add Points (e.g., Damage Sites)
+      map.addLayer({
+        id: 'client-sites',
+        type: 'circle',
+        source: 'client-data',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: { 'circle-radius': 7, 'circle-color': '#ff0000', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' }
+      });
+    }
 
     map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', 'mapillary-points', () => { map.getCanvas().style.cursor = ''; });
@@ -103,9 +117,7 @@
     const toVal = document.getElementById('date-to').value;
     const fromTs = fromVal ? new Date(fromVal).getTime() : 0;
     const toTs = toVal ? new Date(toVal).getTime() : Date.now();
-    
     const filter = ['all', ['>=', ['get', 'captured_at'], fromTs], ['<=', ['get', 'captured_at'], toTs]];
-    
     if (map.getLayer('mapillary-lines')) map.setFilter('mapillary-lines', filter);
     if (map.getLayer('mapillary-points')) map.setFilter('mapillary-points', filter);
   }
