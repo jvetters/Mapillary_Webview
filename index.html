@@ -104,18 +104,18 @@
   }
 
   map.on('load', () => {
-    // 1. Mapillary Sequences and Points
+    // 1. Mapillary Tiles
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
       minzoom: 0,
       maxzoom: 24,
-      promoteId: 'id' // Essential for feature state selection
+      promoteId: 'id'
     });
 
     map.addLayer({ id: 'mapillary-lines', type: 'line', source: 'mapillary', 'source-layer': 'sequence', paint: { 'line-color': '#35af6d', 'line-width': 1.5, 'line-opacity': 0.6 } });
     
-    // Directional Cone Layer (Direction Indicator)
+    // RESTORED DIRECTIONAL CONE
     map.addLayer({
       id: 'mapillary-direction',
       type: 'symbol',
@@ -127,11 +127,11 @@
         'icon-rotation-alignment': 'map',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 1, 18, 3]
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 1.5, 18, 4] // Larger cone at high zoom
       },
       paint: {
         'icon-color': '#ff9f43',
-        'icon-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 1, 0]
+        'icon-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 1, 0] // Only show when selected
       }
     });
 
@@ -143,7 +143,7 @@
         paint: { 
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1, 10, 2.5, 14, 6, 22, 18], 
             'circle-color': ['case', ['boolean', ['feature-state', 'selected'], false], '#ff9f43', '#35af6d'],
-            'circle-stroke-width': ['case', ['boolean', ['feature-state', 'selected'], false], 2, 1], 
+            'circle-stroke-width': ['case', ['boolean', ['feature-state', 'selected'], false], 3, 1], 
             'circle-stroke-color': '#fff' 
         } 
     });
@@ -187,12 +187,10 @@
     const feature = e.features[0];
     currentImageKey = feature.properties.id;
 
-    // Reset previous selection state
     if (selectedPointId !== null) {
       map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: false });
     }
     
-    // Set new selection state
     selectedPointId = feature.id;
     map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: true });
 
@@ -212,6 +210,7 @@
     const filter = ['all', ['>=', ['get', 'captured_at'], fromTs], ['<=', ['get', 'captured_at'], toTs]];
     if (map.getLayer('mapillary-lines')) map.setFilter('mapillary-lines', filter);
     if (map.getLayer('mapillary-points')) map.setFilter('mapillary-points', filter);
+    if (map.getLayer('mapillary-direction')) map.setFilter('mapillary-direction', filter);
   }
 
   function applyDebrisFilter() {
@@ -219,7 +218,6 @@
     map.setFilter('debris-layer', selectedType === 'All' ? null : ['==', ['get', 'Debris Type'], selectedType]);
   }
 
-  // UPDATED DOWNLOAD: Forces a direct file download via blob
   async function downloadImage() {
     if (!currentImageKey) { alert("Select a point first."); return; }
     try {
