@@ -49,7 +49,7 @@
     <label>From Date</label><input type="date" id="date-from" value="2026-02-03">
     <label>To Date</label><input type="date" id="date-to">
     <button onclick="applyDateFilter()">Filter Road Runs</button>
-    <button id="download-btn" onclick="downloadFlatImage()">Download Image</button>
+    <button id="download-btn" onclick="downloadImage()">Download Image</button>
     <hr style="border:0; border-top:1px solid #eee; margin: 4px 0;">
     <label>Debris Type Filter</label>
     <select id="debris-type-selector" onchange="applyDebrisFilter()">
@@ -104,38 +104,51 @@
   }
 
   map.on('load', () => {
-    // 1. Mapillary Tiles
+    // 1. Mapillary Sequences and Points
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
       minzoom: 0,
-      maxzoom: 24
+      maxzoom: 24,
+      promoteId: 'id' // Essential for feature state selection
     });
 
     map.addLayer({ id: 'mapillary-lines', type: 'line', source: 'mapillary', 'source-layer': 'sequence', paint: { 'line-color': '#35af6d', 'line-width': 1.5, 'line-opacity': 0.6 } });
-    map.addLayer({ id: 'mapillary-points', type: 'circle', source: 'mapillary', 'source-layer': 'image', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1, 10, 2.5, 14, 6, 22, 18], 'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' } });
-
-    // NEW: Directional Indicator Layer
+    
+    // Directional Cone Layer (Direction Indicator)
     map.addLayer({
       id: 'mapillary-direction',
       type: 'symbol',
       source: 'mapillary',
       'source-layer': 'image',
       layout: {
-        'icon-image': 'triangle-15', // Standard Mapbox triangle for direction
+        'icon-image': 'triangle-15', 
         'icon-rotate': ['get', 'compass_angle'],
         'icon-rotation-alignment': 'map',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 17, 1.5]
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 1, 18, 3]
       },
       paint: {
         'icon-color': '#ff9f43',
-        'icon-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 1, 0] // Only show on selection
+        'icon-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 1, 0]
       }
     });
 
-    // 2. County Boundaries Logic Restored
+    map.addLayer({ 
+        id: 'mapillary-points', 
+        type: 'circle', 
+        source: 'mapillary', 
+        'source-layer': 'image', 
+        paint: { 
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1, 10, 2.5, 14, 6, 22, 18], 
+            'circle-color': ['case', ['boolean', ['feature-state', 'selected'], false], '#ff9f43', '#35af6d'],
+            'circle-stroke-width': ['case', ['boolean', ['feature-state', 'selected'], false], 2, 1], 
+            'circle-stroke-color': '#fff' 
+        } 
+    });
+
+    // 2. County Boundaries
     fetch('./MSDOT/Mississippi_Counties.json')
       .then(res => res.json())
       .then(data => {
@@ -152,7 +165,7 @@
         map.fitBounds(bounds, { padding: 40 });
       });
 
-    // 3. Debris Points Logic Restored
+    // 3. Debris Points
     fetch('./MSDOT/Debris_Points.json')
       .then(res => res.json())
       .then(pointData => {
@@ -168,18 +181,20 @@
     applyDateFilter();
   });
 
-  let selectedImageId = null;
+  let selectedPointId = null;
 
   map.on('click', 'mapillary-points', (e) => {
     const feature = e.features[0];
     currentImageKey = feature.properties.id;
-    
-    // UI Update for Directional Indicator
-    if (selectedImageId !== null) {
-      map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedImageId }, { selected: false });
+
+    // Reset previous selection state
+    if (selectedPointId !== null) {
+      map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: false });
     }
-    selectedImageId = feature.id;
-    map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedImageId }, { selected: true });
+    
+    // Set new selection state
+    selectedPointId = feature.id;
+    map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: true });
 
     document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${currentImageKey}&style=photo&menu=false`;
   });
@@ -190,38 +205,40 @@
   });
 
   function applyDateFilter() {
-    const fromTs = document.getElementById('date-from').value ? new Date(document.getElementById('date-from').value).getTime() : 0;
-    const toTs = document.getElementById('date-to').value ? new Date(document.getElementById('date-to').value).getTime() : Date.now();
+    const fromVal = document.getElementById('date-from').value;
+    const toVal = document.getElementById('date-to').value;
+    const fromTs = fromVal ? new Date(fromVal).getTime() : 0;
+    const toTs = toVal ? new Date(toVal).getTime() : Date.now();
     const filter = ['all', ['>=', ['get', 'captured_at'], fromTs], ['<=', ['get', 'captured_at'], toTs]];
     if (map.getLayer('mapillary-lines')) map.setFilter('mapillary-lines', filter);
     if (map.getLayer('mapillary-points')) map.setFilter('mapillary-points', filter);
   }
 
   function applyDebrisFilter() {
-    const type = document.getElementById('debris-type-selector').value;
-    map.setFilter('debris-layer', type === 'All' ? null : ['==', ['get', 'Debris Type'], type]);
+    const selectedType = document.getElementById('debris-type-selector').value;
+    map.setFilter('debris-layer', selectedType === 'All' ? null : ['==', ['get', 'Debris Type'], selectedType]);
   }
 
-  // Stable Download Logic
-  async function downloadFlatImage() {
+  // UPDATED DOWNLOAD: Forces a direct file download via blob
+  async function downloadImage() {
     if (!currentImageKey) { alert("Select a point first."); return; }
     try {
       const res = await fetch(`https://graph.mapillary.com/${currentImageKey}?fields=thumb_2048_url&access_token=${mlyToken}`);
       const data = await res.json();
       const imageUrl = data.thumb_2048_url;
       if (imageUrl) {
-        const imageRes = await fetch(imageUrl);
-        const blob = await imageRes.blob();
-        const url = window.URL.createObjectURL(blob);
+        const imageResponse = await fetch(imageUrl);
+        const blob = await imageResponse.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
+        a.href = downloadUrl;
         a.download = `Debris_View_${currentImageKey}.jpg`;
         document.body.appendChild(a);
         a.click();
         a.remove();
-        window.URL.revokeObjectURL(url);
+        window.URL.revokeObjectURL(downloadUrl);
       }
-    } catch (err) { alert("Download blocked by browser security. Please right-click the image in the viewer."); }
+    } catch (err) { alert("Security block detected. Please right-click the image in the viewer to save."); }
   }
 
   map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
