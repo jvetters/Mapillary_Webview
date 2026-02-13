@@ -8,7 +8,7 @@
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 <style>
   body { margin: 0; padding: 0; font-family: sans-serif; background: #1a1a1a; overflow: hidden; }
-  #mly-container { position: absolute; top: 0; bottom: 0; left: 0; width: 50%; background: #000; border-right: 3px solid #35af6d; }
+  #mly-container { position: absolute; top: 0; bottom: 0; left: 0; width: 50%; background: #000; border-right: 2px solid #35af6d; }
   #map-container { position: absolute; top: 0; bottom: 0; right: 0; width: 50%; }
   #map { width: 100%; height: 100%; }
   iframe { width: 100%; height: 100%; border: none; }
@@ -50,10 +50,93 @@
     return colour;
   }
 
-  map.on('idle', () => { map.resize(); });
-
   map.on('load', () => {
-    // 1. ADD ALL SOURCES
+    // 1. ADD MAPILLARY SOURCE FIRST
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
+      maxzoom: 17
+    });
+
+    // 2. FETCH CLIENT DATA
+    fetch(`./data/${projectID}.json`)
+      .then(res => res.json())
+      .then(data => {
+        data.features.forEach(f => {
+          f.properties.dynamicColor = stringToColour(f.properties.Name || "default");
+        });
+        map.addSource('client-data', { type: 'geojson', data: data });
+
+        // BASE: County Fills (Highly Transparent)
+        map.addLayer({
+          id: 'county-fills',
+          type: 'fill',
+          source: 'client-data',
+          paint: {
+            'fill-color': ['get', 'dynamicColor'],
+            'fill-opacity': 0.15,
+            'fill-outline-color': 'rgba(255,255,255,0.2)'
+          }
+        });
+
+        // OVERLAY: Mapillary Lines
+        map.addLayer({
+          id: 'mapillary-lines',
+          type: 'line',
+          source: 'mapillary',
+          'source-layer': 'sequence',
+          paint: { 'line-color': '#35af6d', 'line-width': 1.5, 'line-opacity': 0.6 }
+        });
+
+        // TOP: Mapillary Bubbles
+        map.addLayer({
+          id: 'mapillary-points',
+          type: 'circle',
+          source: 'mapillary',
+          'source-layer': 'image',
+          paint: { 
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 17, 8],
+            'circle-color': '#35af6d', 
+            'circle-stroke-width': 1, 
+            'circle-stroke-color': '#fff' 
+          }
+        });
+
+        // TEXT: Labels on top
+        map.addLayer({
+          id: 'county-labels',
+          type: 'symbol',
+          source: 'client-data',
+          layout: {
+            'text-field': ['get', 'Name'],
+            'text-size': 11,
+            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold']
+          },
+          paint: { 'text-color': '#fff', 'text-halo-color': '#000', 'text-halo-width': 1 }
+        });
+
+        // AUTO-ZOOM
+        const bounds = new mapboxgl.LngLatBounds();
+        data.features.forEach(f => {
+          if (f.geometry && f.geometry.coordinates) {
+            const coords = f.geometry.type === 'Polygon' ? f.geometry.coordinates[0] : f.geometry.coordinates;
+            coords.forEach(c => bounds.extend(Array.isArray(c[0]) ? c[0] : c));
+          }
+        });
+        map.fitBounds(bounds, { padding: 40 });
+      })
+      .catch(e => console.log("JSON Error:", e));
+  });
+
+  // Click Handler
+  map.on('click', 'mapillary-points', (e) => {
+    const imgId = e.features[0].properties.id;
+    document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${imgId}&style=photo&menu=false`;
+  });
+
+  map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
+  map.on('mouseleave', 'mapillary-points', () => { map.getCanvas().style.cursor = ''; });
+  map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+</script>
+</body>
+</html>
