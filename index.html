@@ -7,11 +7,23 @@
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 <style>
-  body { margin: 0; padding: 0; font-family: sans-serif; background: #1a1a1a; overflow: hidden; }
+  body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background: #f4f4f4; overflow: hidden; }
   #mly-container { position: absolute; top: 0; bottom: 0; left: 0; width: 50%; background: #000; border-right: 2px solid #35af6d; }
   #map-container { position: absolute; top: 0; bottom: 0; right: 0; width: 50%; }
   #map { width: 100%; height: 100%; }
   iframe { width: 100%; height: 100%; border: none; }
+
+  /* Date Filter UI */
+  .controls {
+    position: absolute; top: 15px; right: 15px; z-index: 10;
+    background: white; padding: 12px; border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 180px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  label { font-size: 10px; font-weight: bold; color: #666; text-transform: uppercase; }
+  input { padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
+  button { padding: 10px; background: #35af6d; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+  button:hover { background: #2d965d; }
 </style>
 </head>
 <body>
@@ -21,6 +33,13 @@
 </div>
 
 <div id="map-container">
+  <div class="controls">
+    <label>From Date</label>
+    <input type="date" id="date-from">
+    <label>To Date</label>
+    <input type="date" id="date-to">
+    <button onclick="applyDateFilter()">Filter Road Runs</button>
+  </div>
   <div id="map"></div>
 </div>
 
@@ -33,7 +52,7 @@
 
   const map = new mapboxgl.Map({
     container: 'map',
-    style: 'mapbox://styles/mapbox/dark-v11', 
+    style: 'mapbox://styles/mapbox/light-v11', // Reverted to Light map
     zoom: 6,
     center: [-89.3985, 32.3547],
     maxZoom: 17
@@ -51,14 +70,12 @@
   }
 
   map.on('load', () => {
-    // 1. ADD MAPILLARY SOURCE FIRST
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
       maxzoom: 17
     });
 
-    // 2. FETCH CLIENT DATA
     fetch(`./data/${projectID}.json`)
       .then(res => res.json())
       .then(data => {
@@ -67,7 +84,7 @@
         });
         map.addSource('client-data', { type: 'geojson', data: data });
 
-        // BASE: County Fills (Highly Transparent)
+        // Base Counties (Transparent)
         map.addLayer({
           id: 'county-fills',
           type: 'fill',
@@ -75,20 +92,20 @@
           paint: {
             'fill-color': ['get', 'dynamicColor'],
             'fill-opacity': 0.15,
-            'fill-outline-color': 'rgba(255,255,255,0.2)'
+            'fill-outline-color': 'rgba(0,0,0,0.1)'
           }
         });
 
-        // OVERLAY: Mapillary Lines
+        // Mapillary Coverage (The road runs)
         map.addLayer({
           id: 'mapillary-lines',
           type: 'line',
           source: 'mapillary',
           'source-layer': 'sequence',
-          paint: { 'line-color': '#35af6d', 'line-width': 1.5, 'line-opacity': 0.6 }
+          paint: { 'line-color': '#35af6d', 'line-width': 2, 'line-opacity': 0.7 }
         });
 
-        // TOP: Mapillary Bubbles
+        // Interactive Points
         map.addLayer({
           id: 'mapillary-points',
           type: 'circle',
@@ -102,7 +119,7 @@
           }
         });
 
-        // TEXT: Labels on top
+        // Dark labels for the light map
         map.addLayer({
           id: 'county-labels',
           type: 'symbol',
@@ -112,10 +129,9 @@
             'text-size': 11,
             'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold']
           },
-          paint: { 'text-color': '#fff', 'text-halo-color': '#000', 'text-halo-width': 1 }
+          paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 1.5 }
         });
 
-        // AUTO-ZOOM
         const bounds = new mapboxgl.LngLatBounds();
         data.features.forEach(f => {
           if (f.geometry && f.geometry.coordinates) {
@@ -124,11 +140,22 @@
           }
         });
         map.fitBounds(bounds, { padding: 40 });
-      })
-      .catch(e => console.log("JSON Error:", e));
+      });
   });
 
-  // Click Handler
+  // Date Filter Logic
+  function applyDateFilter() {
+    const fromVal = document.getElementById('date-from').value;
+    const toVal = document.getElementById('date-to').value;
+    const fromTs = fromVal ? new Date(fromVal).getTime() : 0;
+    const toTs = toVal ? new Date(toVal).getTime() : Date.now();
+    
+    const filter = ['all', ['>=', ['get', 'captured_at'], fromTs], ['<=', ['get', 'captured_at'], toTs]];
+    
+    if (map.getLayer('mapillary-lines')) map.setFilter('mapillary-lines', filter);
+    if (map.getLayer('mapillary-points')) map.setFilter('mapillary-points', filter);
+  }
+
   map.on('click', 'mapillary-points', (e) => {
     const imgId = e.features[0].properties.id;
     document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${imgId}&style=photo&menu=false`;
