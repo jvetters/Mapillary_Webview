@@ -31,7 +31,7 @@
 </div>
 
 <script>
-  let projectID, pointsString;
+  let config = {};
   mapboxgl.accessToken = 'pk.eyJ1IjoianZldHRlcnMiLCJhIjoiY21sazFhdDg5MDV3dDNlcTI3aXlwejIwaSJ9.ecEavihruz0TZguVQvRiVg';
   const mlyToken = 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b';
 
@@ -43,20 +43,15 @@
     return colour;
   }
 
+  // Load the configuration from the CURRENT folder
   async function loadConfig() {
     try {
-      const response = await fetch('MSDOT/config.json');
-      if (response.ok) {
-        const config = await response.json();
-        projectID = config.projectID;
-        pointsString = config.points;
-      } else { throw new Error(); }
+      const response = await fetch('./config.json');
+      config = await response.json();
+      initMap();
     } catch (e) {
-      const urlParams = new URLSearchParams(window.location.search);
-      projectID = urlParams.get('id') || "Mississippi_Counties";
-      pointsString = urlParams.get('points');
+      console.error("No config.json found in this folder.");
     }
-    initMap();
   }
 
   function initMap() {
@@ -65,30 +60,34 @@
     map.on('load', () => {
       map.addSource('mapillary', { type: 'vector', tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`], maxzoom: 17 });
 
-      if (pointsString) {
-        map.addSource('live-points', { type: 'geojson', data: pointsString });
+      // Load Client Points (Static file or AGOL URL)
+      if (config.pointsFile) {
+        map.addSource('live-points', { type: 'geojson', data: `./${config.pointsFile}` });
         map.addLayer({ id: 'live-points-layer', type: 'circle', source: 'live-points', paint: { 'circle-radius': 7, 'circle-color': '#e74c3c', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } });
       }
 
-      fetch(`MSDOT/${projectID}.json`)
-        .then(res => res.json())
-        .then(data => {
-          data.features.forEach(f => f.properties.dynamicColor = stringToColour(f.properties.Name || "default"));
-          map.addSource('client-data', { type: 'geojson', data: data });
-          map.addLayer({ id: 'county-fills', type: 'fill', source: 'client-data', paint: { 'fill-color': ['get', 'dynamicColor'], 'fill-opacity': 0.15, 'fill-outline-color': 'rgba(0,0,0,0.1)' } }, pointsString ? 'live-points-layer' : undefined);
-          
-          map.addLayer({ id: 'mapillary-lines', type: 'line', source: 'mapillary', 'source-layer': 'sequence', paint: { 'line-color': '#35af6d', 'line-width': 2, 'line-opacity': 0.7 } }, pointsString ? 'live-points-layer' : undefined);
-          map.addLayer({ id: 'mapillary-points', type: 'circle', source: 'mapillary', 'source-layer': 'image', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 17, 8], 'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' } });
-          
-          const bounds = new mapboxgl.LngLatBounds();
-          data.features.forEach(f => {
-            if (f.geometry && f.geometry.coordinates) {
-              const coords = f.geometry.type === 'Polygon' ? f.geometry.coordinates[0] : f.geometry.coordinates;
-              coords.forEach(c => bounds.extend(Array.isArray(c[0]) ? c[0] : c));
-            }
+      // Load Client Polygons
+      if (config.polygonFile) {
+        fetch(`./${config.polygonFile}`)
+          .then(res => res.json())
+          .then(data => {
+            data.features.forEach(f => f.properties.dynamicColor = stringToColour(f.properties.Name || "default"));
+            map.addSource('client-data', { type: 'geojson', data: data });
+            map.addLayer({ id: 'county-fills', type: 'fill', source: 'client-data', paint: { 'fill-color': ['get', 'dynamicColor'], 'fill-opacity': 0.15, 'fill-outline-color': 'rgba(0,0,0,0.1)' } }, 'live-points-layer');
+            
+            map.addLayer({ id: 'mapillary-lines', type: 'line', source: 'mapillary', 'source-layer': 'sequence', paint: { 'line-color': '#35af6d', 'line-width': 2, 'line-opacity': 0.7 } }, 'live-points-layer');
+            map.addLayer({ id: 'mapillary-points', type: 'circle', source: 'mapillary', 'source-layer': 'image', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 17, 8], 'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' } });
+            
+            const bounds = new mapboxgl.LngLatBounds();
+            data.features.forEach(f => {
+              if (f.geometry && f.geometry.coordinates) {
+                const coords = f.geometry.type === 'Polygon' ? f.geometry.coordinates[0] : f.geometry.coordinates;
+                coords.forEach(c => bounds.extend(Array.isArray(c[0]) ? c[0] : c));
+              }
+            });
+            map.fitBounds(bounds, { padding: 40 });
           });
-          map.fitBounds(bounds, { padding: 40 });
-        });
+      }
     });
 
     window.applyDateFilter = () => {
