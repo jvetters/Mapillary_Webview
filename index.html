@@ -56,17 +56,15 @@
     return colour;
   }
 
-  // 1. CONFIGURATION LOADER
   async function loadConfig() {
     try {
-      // First, try to load a local config.json (for professional hosting)
-      const response = await fetch('./config.json');
+      // Look for config in the new MSDOT folder
+      const response = await fetch('./MSDOT/config.json');
       if (response.ok) {
         const config = await response.json();
         projectID = config.projectID;
         pointsString = config.points;
       } else {
-        // If no config file, fall back to URL parameters (for GitHub testing)
         const urlParams = new URLSearchParams(window.location.search);
         projectID = urlParams.get('id');
         pointsString = urlParams.get('points');
@@ -94,7 +92,6 @@
         maxzoom: 17
       });
 
-      // Load ArcGIS Points
       if (pointsString) {
         pointsString.split(',').forEach((layerID, index) => {
           const arcgisUrl = `https://services.arcgis.com/${layerID}/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson&outSR=4326`;
@@ -108,9 +105,9 @@
         });
       }
 
-      // Load County Polygons
       if (projectID) {
-        fetch(`https://jvetters.github.io/Mapillary_Webview/data/${projectID}.json`)
+        // Pointing to the new MSDOT folder path
+        fetch(`./MSDOT/${projectID}.json`)
           .then(res => res.json())
           .then(data => {
             data.features.forEach(f => f.properties.dynamicColor = stringToColour(f.properties.Name || "default"));
@@ -159,7 +156,6 @@
       }
     });
 
-    // Date Filter Logic
     window.applyDateFilter = function() {
       const fromTs = document.getElementById('date-from').value ? new Date(document.getElementById('date-from').value).getTime() : 0;
       const toTs = document.getElementById('date-to').value ? new Date(document.getElementById('date-to').value).getTime() : Date.now();
