@@ -41,7 +41,7 @@
 <body>
 
 <div id="mly-container">
-  <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false"></iframe>
+  <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false&scroll_zoom=true"></iframe>
 </div>
 
 <div id="map-container">
@@ -85,7 +85,6 @@
     maxZoom: 22
   });
 
-  // NEW: Helper to parse coordinates for the Search Bar
   const coordinatesGeocoder = function (query) {
     const matches = query.match(/^[ ]*(?:Lat: )?(-?\d+\.?\d*)[, ]+(?:Lng: )?(-?\d+\.?\d*)[ ]*$/i);
     if (!matches) { return null; }
@@ -109,7 +108,7 @@
 
   const geocoder = new MapboxGeocoder({
       accessToken: mapboxgl.accessToken,
-      localGeocoder: coordinatesGeocoder, // RESTORED Search logic
+      localGeocoder: coordinatesGeocoder, 
       mapboxgl: mapboxgl,
       placeholder: 'Address or Lat, Long',
       countries: 'us',
@@ -178,7 +177,9 @@
     if (selectedPointId !== null) { map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: false }); }
     selectedPointId = feature.id;
     map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: true });
-    document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${currentImageKey}&style=photo&menu=false`;
+    
+    // Kept scroll_zoom=true here for image rotation clicks
+    document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${currentImageKey}&style=photo&menu=false&scroll_zoom=true`;
   });
 
   map.on('click', 'debris-layer', (e) => {
