@@ -2,51 +2,54 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Mapillary Project Tracker - Multi-Filter</title>
+<title>Mapillary Project Tracker</title>
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 <style>
-  body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: sans-serif; }
-  #map { flex: 1; width: 100%; background: #222; }
-  #mly-container { height: 40%; width: 100%; border-top: 5px solid #35af6d; background: #000; }
-  iframe { width: 100%; height: 100%; border: none; }
+  body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: sans-serif; overflow: hidden; }
   
+  /* Photo Viewer: 60% Left */
+  #mly-container { width: 60%; height: 100%; background: #000; border-right: 4px solid #35af6d; position: relative; }
+  iframe { width: 100%; height: 100%; border: none; }
+
+  /* Map Side: 40% Right */
+  #map-container { width: 40%; height: 100%; position: relative; }
+  #map { width: 100%; height: 100%; }
+
+  /* Controls: Top Right */
   .controls {
-    position: absolute; top: 10px; left: 10px; z-index: 10;
-    background: white; padding: 15px; border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 280px;
+    position: absolute; top: 10px; right: 10px; z-index: 10;
+    background: rgba(255, 255, 255, 0.95); padding: 15px; border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 220px;
     display: flex; flex-direction: column; gap: 10px;
   }
   .row { display: flex; flex-direction: column; gap: 4px; }
   label { font-size: 11px; font-weight: bold; color: #555; text-transform: uppercase; }
-  input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
-  button { padding: 12px; background: #35af6d; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 5px; }
-  .status { font-size: 11px; color: #777; font-style: italic; }
+  input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
+  button { padding: 10px; background: #35af6d; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+  button:hover { background: #2d945b; }
 </style>
 </head>
 <body>
 
-<div class="controls">
-  <div class="row">
-    <label>Creator ID (Numerical)</label>
-    <input type="text" id="user-input" placeholder="e.g. 1593217331926857" value="1593217331926857">
-  </div>
-  <div class="row">
-    <label>From Date</label>
-    <input type="date" id="date-from">
-  </div>
-  <div class="row">
-    <label>To Date</label>
-    <input type="date" id="date-to">
-  </div>
-  <button onclick="applyFilters()">Update Project Map</button>
-  <div id="filter-status" class="status">Enter numerical ID to filter</div>
-</div>
-
-<div id="map"></div>
 <div id="mly-container">
   <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false"></iframe>
+</div>
+
+<div id="map-container">
+  <div class="controls">
+    <div class="row">
+      <label>From Date</label>
+      <input type="date" id="date-from">
+    </div>
+    <div class="row">
+      <label>To Date</label>
+      <input type="date" id="date-to">
+    </div>
+    <button onclick="applyFilters()">Filter Progress</button>
+  </div>
+  <div id="map"></div>
 </div>
 
 <script>
@@ -66,64 +69,6 @@
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`]
     });
 
+    // Sequence Lines: Visible globally
     map.addLayer({
-      id: 'mapillary-lines',
-      type: 'line',
-      source: 'mapillary',
-      'source-layer': 'sequence',
-      paint: { 'line-color': '#35af6d', 'line-width': 2.5, 'line-opacity': 0.7 }
-    });
-
-    map.addLayer({
-      id: 'mapillary-points',
-      type: 'circle',
-      source: 'mapillary',
-      'source-layer': 'image',
-      minzoom: 10,
-      paint: { 'circle-radius': 6, 'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' }
-    });
-  });
-
-  function applyFilters() {
-    const user = document.getElementById('user-input').value.trim();
-    const fromVal = document.getElementById('date-from').value;
-    const toVal = document.getElementById('date-to').value;
-    const status = document.getElementById('filter-status');
-    
-    // Convert to Unix milliseconds for the tile schema
-    const fromTs = fromVal ? new Date(fromVal).getTime() : 0;
-    const toTs = toVal ? new Date(toVal).getTime() : Date.now();
-    
-    let filterArr = ['all'];
-    
-    // User Filter: Use creator_id (int) instead of creator_username (string)
-    if (user !== "") {
-      filterArr.push(['==', ['get', 'creator_id'], parseInt(user)]);
-    }
-    
-    // Date Filter: captured_at is an integer timestamp
-    if (fromTs > 0 || toTs < Date.now()) {
-      filterArr.push(['>=', ['get', 'captured_at'], fromTs]);
-      filterArr.push(['<=', ['get', 'captured_at'], toTs]);
-    }
-
-    const finalFilter = filterArr.length > 1 ? filterArr : null;
-    
-    if (map.getLayer('mapillary-lines')) map.setFilter('mapillary-lines', finalFilter);
-    if (map.getLayer('mapillary-points')) map.setFilter('mapillary-points', finalFilter);
-    
-    status.innerText = user ? `Filtering for ID: ${user}` : "Showing all imagery";
-  }
-
-  map.on('click', (e) => {
-    const features = map.queryRenderedFeatures(e.point, { layers: ['mapillary-points', 'mapillary-lines'] });
-    if (features.length > 0) {
-      const imageId = features[0].properties.id;
-      // The embed viewer still supports username for the overlay
-      const newUrl = `https://www.mapillary.com/embed?image_key=${imageId}&style=photo&menu=false&username=jvetters`;
-      document.getElementById('mly-frame').src = newUrl;
-    }
-  });
-</script>
-</body>
-</html>
+      id: 'map
