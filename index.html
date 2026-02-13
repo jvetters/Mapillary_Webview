@@ -6,6 +6,10 @@
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+<link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css">
+
 <style>
   body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background: #f4f4f4; overflow: hidden; }
   #mly-container { position: absolute; top: 0; bottom: 0; left: 0; width: 50%; background: #000; border-right: 2px solid #35af6d; }
@@ -13,8 +17,9 @@
   #map { width: 100%; height: 100%; }
   iframe { width: 100%; height: 100%; border: none; }
 
+  /* Controls shifted down to accommodate Search Bar */
   .controls {
-    position: absolute; top: 15px; right: 15px; z-index: 10;
+    position: absolute; top: 70px; right: 15px; z-index: 10;
     background: white; padding: 12px; border-radius: 8px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 180px;
     display: flex; flex-direction: column; gap: 8px;
@@ -27,6 +32,9 @@
   .legend-container { margin-top: 5px; display: flex; flex-direction: column; gap: 4px; }
   .legend-item { display: flex; align-items: center; font-size: 11px; color: #444; font-weight: bold; }
   .legend-key { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; border: 1px solid #fff; }
+
+  /* Ensure search bar width matches the control panel */
+  .mapboxgl-ctrl-geocoder { min-width: 204px; }
 </style>
 </head>
 <body>
@@ -74,6 +82,19 @@
     maxZoom: 22
   });
 
+  // MS-Prioritized Search Bar
+  const geocoder = new MapboxGeocoder({
+      accessToken: mapboxgl.accessToken,
+      mapboxgl: mapboxgl,
+      placeholder: 'Search MS Address or Lng, Lat',
+      countries: 'us',
+      bbox: [-91.655, 30.205, -88.099, 34.996], // Mississippi boundaries
+      proximity: { longitude: -89.3985, latitude: 32.3547 }, // Favor center of MS
+      marker: { color: '#e74c3c' }, 
+      zoom: 16
+  });
+  map.addControl(geocoder, 'top-right');
+
   const stringToColour = (str) => {
     let hash = 0;
     for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
@@ -83,11 +104,10 @@
   }
 
   map.on('load', () => {
-    // 1. Mapillary (Low Zoom Visibility Enabled)
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
-      minzoom: 0, // Allow rendering at the furthest zoom
+      minzoom: 0,
       maxzoom: 24
     });
 
@@ -107,10 +127,10 @@
       paint: { 
         'circle-radius': [
           'interpolate', ['linear'], ['zoom'], 
-          4, 1,      // Starts appearing at zoom 4 (Region level)
-          10, 2.5,   // Standard size at county level
-          14, 6,     // Larger at street level
-          22, 18     // Huge for over-zoom
+          4, 1,
+          10, 2.5,
+          14, 6,
+          22, 18
         ],
         'circle-color': '#35af6d', 
         'circle-stroke-width': 1, 
@@ -118,7 +138,6 @@
       }
     });
 
-    // 2. MSDOT Counties
     fetch('./MSDOT/Mississippi_Counties.json')
       .then(res => res.json())
       .then(data => {
@@ -141,7 +160,6 @@
         map.fitBounds(bounds, { padding: 40 });
       });
 
-    // 3. MSDOT Debris Points
     fetch('./MSDOT/Debris_Points.json')
       .then(res => res.json())
       .then(pointData => {
@@ -190,6 +208,7 @@
   map.on('click', 'mapillary-points', (e) => {
     document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${e.features[0].properties.id}&style=photo&menu=false`;
   });
+  
   map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'mapillary-points', () => { map.getCanvas().style.cursor = ''; });
   map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
