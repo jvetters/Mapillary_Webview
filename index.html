@@ -115,7 +115,7 @@
     map.addLayer({ id: 'mapillary-lines', type: 'line', source: 'mapillary', 'source-layer': 'sequence', paint: { 'line-color': '#35af6d', 'line-width': 1.5, 'line-opacity': 0.6 } });
     map.addLayer({ id: 'mapillary-points', type: 'circle', source: 'mapillary', 'source-layer': 'image', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1, 10, 2.5, 14, 6, 22, 18], 'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' } });
 
-    // 2. County Boundaries
+    // 2. County Boundary Logic Restored
     fetch('./MSDOT/Mississippi_Counties.json')
       .then(res => res.json())
       .then(data => {
@@ -150,7 +150,7 @@
         map.fitBounds(bounds, { padding: 40 });
       });
 
-    // 3. Debris Points
+    // 3. Debris Points Logic Restored
     fetch('./MSDOT/Debris_Points.json')
       .then(res => res.json())
       .then(pointData => {
@@ -216,25 +216,15 @@
     map.setFilter('debris-layer', selectedType === 'All' ? null : ['==', ['get', 'Debris Type'], selectedType]);
   }
 
-  async function downloadFlatImage() {
-    if (!currentImageKey) { alert("Select a point first."); return; }
-    try {
-      const flatUrl = `https://images.mapillary.com/${currentImageKey}/thumb-2048.jpg`;
-      const response = await fetch(flatUrl);
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `Flat_View_${currentImageKey}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(blobUrl);
-    } catch (err) {
-      console.error("Download failed:", err);
-      alert("Unable to download image. The browser blocked the request.");
+  // FIX: Direct navigation to bypass CORS security blocking
+  function downloadFlatImage() {
+    if (!currentImageKey) { 
+      alert("Please select a point on the map first."); 
+      return; 
     }
+    // Pulls the pre-rendered non-distorted flat view from Mapillary's image server
+    const flatUrl = `https://images.mapillary.com/${currentImageKey}/thumb-2048.jpg`;
+    window.open(flatUrl, '_blank'); 
   }
 
   map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
