@@ -2,12 +2,11 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Mapillary Tracker - Stable 50/50</title>
+<title>Mapillary Tracker - Persistent Bubbles</title>
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 <style>
-  /* Flexbox ensures both halves are visible and sized correctly */
   body { margin: 0; padding: 0; display: flex; height: 100vh; width: 100vw; overflow: hidden; font-family: sans-serif; }
   
   #mly-container { width: 50%; height: 100%; background: #000; border-right: 2px solid #35af6d; box-sizing: border-box; }
@@ -61,7 +60,6 @@
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`]
     });
 
-    // Sequence lines for broad overview
     map.addLayer({
       id: 'mapillary-lines',
       type: 'line',
@@ -70,23 +68,31 @@
       paint: { 'line-color': '#35af6d', 'line-width': 2, 'line-opacity': 0.5 }
     });
 
-    // Native-style bubbles visible at all zoom levels
+    // Bubbles configured for persistent visibility
     map.addLayer({
       id: 'mapillary-points',
       type: 'circle',
       source: 'mapillary',
       'source-layer': 'image',
-      minzoom: 0, // Clickable even when zoomed way out
-      maxzoom: 24,
+      minzoom: 0, 
+      maxzoom: 24, // Ensures they stay visible when zoomed all the way in
       paint: { 
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 1, 10, 2, 14, 5, 18, 10],
+        // Radius grows as you zoom in to keep the points clickable
+        'circle-radius': [
+          'interpolate', ['linear'], ['zoom'],
+          0, 1,      // Tiny at world view
+          10, 2,     // Visible at city view
+          14, 6,     // Larger at street view
+          18, 12,    // Bold for precision picking
+          22, 20     // Massive at max zoom
+        ],
         'circle-color': '#35af6d', 
         'circle-stroke-width': 1, 
         'circle-stroke-color': '#fff' 
       }
     });
 
-    // Change cursor to pointer over clickable points
+    // Hand pointer selector logic
     map.on('mouseenter', 'mapillary-points', () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', 'mapillary-points', () => { map.getCanvas().style.cursor = ''; });
   });
@@ -97,7 +103,6 @@
     const fromTs = fromVal ? new Date(fromVal).getTime() : 0;
     const toTs = toVal ? new Date(toVal).getTime() : Date.now();
     
-    // Combine date logic into a single filter array
     const filter = ['all', ['>=', ['get', 'captured_at'], fromTs], ['<=', ['get', 'captured_at'], toTs]];
     
     if (map.getLayer('mapillary-lines')) map.setFilter('mapillary-lines', filter);
@@ -108,7 +113,6 @@
     const features = map.queryRenderedFeatures(e.point, { layers: ['mapillary-points', 'mapillary-lines'] });
     if (features.length > 0) {
       const imageId = features[0].properties.id;
-      // Load selected photo into the left panel
       document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${imageId}&style=photo&menu=false`;
     }
   });
