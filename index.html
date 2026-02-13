@@ -39,7 +39,7 @@
 
 <div id="map-container">
   <div class="controls">
-    <label>From Date</label><input type="date" id="date-from">
+    <label>From Date</label><input type="date" id="date-from" value="2026-02-03">
     <label>To Date</label><input type="date" id="date-to">
     <button onclick="applyDateFilter()">Filter Road Runs</button>
     
@@ -160,15 +160,14 @@
             'circle-stroke-color': '#fff',
             'circle-color': [
               'match', ['get', 'Debris Type'],
-              'Hanger', '#f1c40f',
-              'Leaner', '#e67e22',
-              'VEG', '#2ecc71',
-              'C&D', '#9b59b6',
-              '#e74c3c'
+              'Hanger', '#f1c40f', 'Leaner', '#e67e22', 'VEG', '#2ecc71', 'C&D', '#9b59b6', '#e74c3c'
             ]
           }
         });
       });
+
+    // APPLY PRE-FILTER AUTOMATICALLY
+    applyDateFilter();
   });
 
   function applyDateFilter() {
