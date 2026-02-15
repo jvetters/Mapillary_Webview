@@ -89,13 +89,13 @@
 <script>
   mapboxgl.accessToken = 'pk.eyJ1IjoianZldHRlcnMiLCJhIjoiY21sazFhdDg5MDV3dDNlcTI3aXlwejIwaSJ9.ecEavihruz0TZguVQvRiVg';
   const mlyToken = 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b';
-  let pnmViewer = null, currentImageKey = null, currentDroneUrl = null;
+  let pnmViewer = null, currentImageKey = null, currentDroneUrl = null, selectedPointId = null;
 
   const map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/mapbox/light-v11',
     zoom: 6,
-    center: [-89.8, 32.7], // Centered to West to balance MS Counties
+    center: [-89.8, 32.7],
     maxZoom: 22
   });
 
@@ -121,10 +121,32 @@
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
       minzoom: 0,
-      maxzoom: 24
+      maxzoom: 24,
+      promoteId: 'id' // Essential for highlighting
     });
     map.addLayer({ id: 'mapillary-lines', type: 'line', source: 'mapillary', 'source-layer': 'sequence', paint: { 'line-color': '#35af6d', 'line-width': 1.5, 'line-opacity': 0.6 } });
-    map.addLayer({ id: 'mapillary-points', type: 'circle', source: 'mapillary', 'source-layer': 'image', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1, 10, 2.5, 14, 6, 22, 18], 'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' } });
+    map.addLayer({
+      id: 'mapillary-points',
+      type: 'circle',
+      source: 'mapillary',
+      'source-layer': 'image',
+      paint: { 
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1, 10, 2.5, 14, 6, 22, 18],
+        'circle-color': [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            '#ff9f43', // Orange highlight when clicked
+            '#35af6d'  // Default green
+        ],
+        'circle-stroke-width': [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            3,
+            1
+        ],
+        'circle-stroke-color': '#fff'
+      }
+    });
 
     // 2. Counties
     fetch('./MSDOT/Mississippi_Counties.json').then(res => res.json()).then(data => {
@@ -170,8 +192,8 @@
         map.setFilter('debris-layer', null);
         map.setFilter('drone-layer', null);
     } else if (selectedType === 'Clear') {
-        map.setFilter('debris-layer', ['==', 'true', 'false']); // Hides all debris
-        map.setFilter('drone-layer', ['==', 'true', 'false']); // Hides all drones
+        map.setFilter('debris-layer', ['==', 'true', 'false']);
+        map.setFilter('drone-layer', ['==', 'true', 'false']);
     } else if (selectedType === 'Drone 360') {
         map.setFilter('debris-layer', ['==', 'true', 'false']);
         map.setFilter('drone-layer', null);
@@ -182,6 +204,15 @@
   }
 
   map.on('click', 'mapillary-points', (e) => {
+    // Remove old highlight
+    if (selectedPointId !== null) {
+        map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: false });
+    }
+    
+    // Set new highlight
+    selectedPointId = e.features[0].id;
+    map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: true });
+
     currentImageKey = e.features[0].properties.id; currentDroneUrl = null;
     document.getElementById('mly-frame').style.display = 'block'; document.getElementById('panorama').style.display = 'none';
     document.getElementById('view-indicator').style.display = 'block'; document.getElementById('view-indicator').innerText = 'Current View: Street Imagery';
