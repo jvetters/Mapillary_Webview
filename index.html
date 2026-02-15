@@ -39,7 +39,7 @@
   .legend-item { display: flex; align-items: center; font-size: 11px; color: #444; font-weight: bold; }
   .legend-key { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; border: 1px solid #fff; }
 
-  /* 360 Viewer specific height in popup */
+  /* Style for the 360 viewer inside the popup */
   #pano-viewer { width: 100%; height: 200px; background: #eee; margin-top: 10px; }
 </style>
 </head>
@@ -97,7 +97,6 @@
     maxZoom: 22
   });
 
-  // Geocoder setup
   const geocoder = new MapboxGeocoder({
       accessToken: mapboxgl.accessToken,
       mapboxgl: mapboxgl,
@@ -133,16 +132,17 @@
         map.addLayer({ id: 'county-fills', type: 'fill', source: 'counties', paint: { 'fill-color': ['get', 'dynamicColor'], 'fill-opacity': 0.15, 'fill-outline-color': '#000' } }, 'mapillary-lines');
     });
 
-    // 3. Debris Points (CSV/JSON)
+    // 3. Debris Points (Restored Path)
     fetch('./MSDOT/Debris_Points.json').then(res => res.json()).then(pointData => {
+        pointData.features.forEach(f => { if (f.properties.Longitude && f.properties.Latitude) f.geometry = { type: 'Point', coordinates: [parseFloat(f.properties.Longitude), parseFloat(f.properties.Latitude)] }; });
         map.addSource('debris-points', { type: 'geojson', data: pointData });
         map.addLayer({ id: 'debris-layer', type: 'circle', source: 'debris-points', paint: { 'circle-radius': 7, 'circle-stroke-width': 2, 'circle-stroke-color': '#fff', 'circle-color': ['match', ['get', 'Debris Type'], 'Hanger', '#f1c40f', 'Leaner', '#e67e22', 'VEG', '#2ecc71', 'C&D', '#9b59b6', '#e74c3c'] } });
     });
 
-    // 4. NEW: Drone 360 Photos (Google Drive source)
+    // 4. Drone Photos (New Renamed Path in MSDOT folder)
     map.addSource('drone-360', {
         type: 'geojson',
-        data: './points.json'
+        data: './MSDOT/dronepoints.json'
     });
 
     map.addLayer({
@@ -160,27 +160,23 @@
     applyDateFilter();
   });
 
-  // Mapillary Zoom
   function zoomMapillary(delta) {
     currentZoom = Math.min(Math.max(currentZoom + delta, 0.5), 3.0);
     const frame = document.getElementById('mly-frame');
     frame.contentWindow.postMessage(JSON.stringify({type: 'mly.zoom', value: currentZoom}), 'https://www.mapillary.com');
   }
 
-  // Click Mapillary
   map.on('click', 'mapillary-points', (e) => {
-    const feature = e.features[0];
-    currentImageKey = feature.properties.id;
+    currentImageKey = e.features[0].properties.id;
     document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${currentImageKey}&style=photo&menu=false&publish=true`;
   });
 
-  // Click Debris
   map.on('click', 'debris-layer', (e) => {
     const props = e.features[0].properties;
-    new mapboxgl.Popup().setLngLat(e.lngLat).setHTML(`<strong>Debris Type:</strong> ${props['Debris Type']}`).addTo(map);
+    new mapboxgl.Popup().setLngLat(e.lngLat).setHTML(`<strong>Type:</strong> ${props['Debris Type']}<br>Lat: ${props.Latitude}`).addTo(map);
   });
 
-  // CLICK DRONE PINS: Opens Pannellum 360 Viewer
+  // Drone 360 Interaction
   map.on('click', 'drone-layer', (e) => {
     const props = e.features[0].properties;
     const coordinates = e.features[0].geometry.coordinates.slice();
@@ -190,14 +186,13 @@
         .setLngLat(coordinates)
         .setHTML(`
             <div style="width:300px;">
-                <label>Drone Imagery - ${props.DateTime || 'Capture'}</label>
+                <label style="font-weight:bold; color:#35af6d;">Drone Capture - ${props.DateTime || 'N/A'}</label>
                 <div id="pano-viewer"></div>
-                <p style="font-size:10px; margin-top:5px;">GPS: ${coordinates[1]}, ${coordinates[0]}</p>
             </div>
         `)
         .addTo(map);
 
-    // Initialize the 360 view inside the popup
+    // Initialize 360 viewer in popup
     pannellum.viewer('pano-viewer', {
         "type": "equirectangular",
         "panorama": photoUrl,
@@ -220,7 +215,6 @@
     map.setFilter('debris-layer', selectedType === 'All' ? null : ['==', ['get', 'Debris Type'], selectedType]);
   }
 
-  // Mouse Hovers
   const layerIds = ['mapillary-points', 'debris-layer', 'drone-layer'];
   layerIds.forEach(id => {
     map.on('mouseenter', id, () => { map.getCanvas().style.cursor = 'pointer'; });
