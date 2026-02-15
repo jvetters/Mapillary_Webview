@@ -23,7 +23,7 @@
   .controls {
     position: absolute; top: 15px; right: 15px; z-index: 10;
     background: white; padding: 12px; border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 195px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 210px;
     display: flex; flex-direction: column; gap: 8px;
   }
   label { font-size: 10px; font-weight: bold; color: #666; text-transform: uppercase; }
@@ -33,9 +33,10 @@
   
   #download-btn { background: #2c3e50; margin-top: 5px; }
   
-  .legend-container { margin-top: 5px; display: flex; flex-direction: column; gap: 4px; }
+  .legend-container { margin-top: 5px; display: flex; flex-direction: column; gap: 6px; }
   .legend-item { display: flex; align-items: center; font-size: 11px; color: #444; font-weight: bold; }
-  .legend-key { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; border: 1px solid #fff; }
+  .legend-key { width: 14px; height: 14px; border-radius: 50%; margin-right: 10px; border: 1px solid #fff; }
+  .legend-icon { width: 24px; height: 24px; margin-right: 10px; object-fit: contain; }
 
   #view-indicator {
     position: absolute; bottom: 20px; left: 20px; z-index: 20;
@@ -75,11 +76,13 @@
     <hr style="border:0; border-top:1px solid #eee; margin: 4px 0;">
     <label>Legend</label>
     <div class="legend-container">
-      <div class="legend-item"><div class="legend-key" style="background: #00ffff; border: 1px solid #000;"></div>Drone 360</div>
+      <div class="legend-item"><img src="https://docs.mapbox.com/mapbox-gl-js/assets/custom_marker.png" class="legend-icon">Drone 360</div>
+      <div class="legend-item"><div class="legend-key" style="background: #35af6d;"></div>Road Runs</div>
       <div class="legend-item"><div class="legend-key" style="background: #f1c40f;"></div>Hanger</div>
       <div class="legend-item"><div class="legend-key" style="background: #e67e22;"></div>Leaner</div>
       <div class="legend-item"><div class="legend-key" style="background: #2ecc71;"></div>VEG</div>
       <div class="legend-item"><div class="legend-key" style="background: #9b59b6;"></div>C&D</div>
+      <div class="legend-item"><div class="legend-key" style="border: 2px solid #35af6d; background: transparent; border-radius: 0; width: 14px; height: 10px;"></div>County Boundaries</div>
     </div>
   </div>
   <div id="map"></div>
@@ -107,19 +110,31 @@
         map.addImage('drone-icon', image);
     });
 
-    // 2. RESTORED COUNTY POLYGONS (Bottom Layer)
-    fetch('./MSDOT/counties.json').then(res => res.json()).then(data => {
-        map.addSource('counties', { type: 'geojson', data: data });
-        map.addLayer({
-            id: 'county-layer',
-            type: 'fill',
-            source: 'counties',
-            paint: {
-                'fill-color': '#000',
-                'fill-opacity': 0.05,
-                'fill-outline-color': '#35af6d'
-            }
-        }, 'mapillary-lines'); // Ensure it stays below lines
+    // 2. County Polygons Source & Layer
+    map.addSource('counties', {
+        type: 'geojson',
+        data: './MSDOT/counties.json' // Ensure this path is correct in your repo
+    });
+
+    map.addLayer({
+        id: 'county-layer',
+        type: 'fill',
+        source: 'counties',
+        paint: {
+            'fill-color': '#000',
+            'fill-opacity': 0.05
+        }
+    });
+
+    map.addLayer({
+        id: 'county-outline',
+        type: 'line',
+        source: 'counties',
+        paint: {
+            'line-color': '#35af6d',
+            'line-width': 2,
+            'line-opacity': 0.5
+        }
     });
 
     // 3. Mapillary
@@ -142,8 +157,9 @@
         source: 'drone-360',
         layout: {
             'icon-image': 'drone-icon',
-            'icon-size': 0.25, // INCREASED FROM 0.08
-            'icon-allow-overlap': true
+            'icon-size': 0.6, // INCREASED TO BE PROMINENT
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true
         }
     });
 
@@ -164,7 +180,6 @@
   map.on('click', 'drone-layer', (e) => {
     const props = e.features[0].properties;
     currentDroneUrl = props.Viewer_Link; currentImageKey = null;
-    
     document.getElementById('mly-frame').style.display = 'none'; document.getElementById('panorama').style.display = 'block';
     
     const indicator = document.getElementById('view-indicator');
