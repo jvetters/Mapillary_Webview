@@ -21,10 +21,13 @@
   iframe, #panorama { width: 100%; height: 100%; border: none; background: #000; display: block; }
   #panorama { display: none; }
 
+  /* Expanded Search Bar Width */
+  .mapboxgl-ctrl-geocoder { min-width: 280px !important; }
+
   .controls {
     position: absolute; top: 15px; right: 15px; z-index: 10;
     background: white; padding: 12px; border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 180px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 190px;
     display: flex; flex-direction: column; gap: 8px;
   }
   label { font-size: 10px; font-weight: bold; color: #666; text-transform: uppercase; }
@@ -62,6 +65,7 @@
     <label>Type Filter</label>
     <select id="debris-type-selector" onchange="applyDebrisFilter()">
       <option value="All">All Types</option>
+      <option value="Clear">Clear (Imagery Only)</option>
       <option value="Drone 360">Drone 360</option>
       <option value="Hanger">Hanger</option>
       <option value="Leaner">Leaner</option>
@@ -91,11 +95,10 @@
     container: 'map',
     style: 'mapbox://styles/mapbox/light-v11',
     zoom: 6,
-    center: [-89.3985, 32.3547],
+    center: [-89.8, 32.7], // Centered to West to balance MS Counties
     maxZoom: 22
   });
 
-  // RESTORED: Geocoder for Address/LatLong searching
   const geocoder = new MapboxGeocoder({
       accessToken: mapboxgl.accessToken,
       mapboxgl: mapboxgl,
@@ -113,7 +116,7 @@
   }
 
   map.on('load', () => {
-    // 1. Street Imagery (Mapillary)
+    // 1. Street Imagery
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
@@ -121,18 +124,9 @@
       maxzoom: 24
     });
     map.addLayer({ id: 'mapillary-lines', type: 'line', source: 'mapillary', 'source-layer': 'sequence', paint: { 'line-color': '#35af6d', 'line-width': 1.5, 'line-opacity': 0.6 } });
-    map.addLayer({
-      id: 'mapillary-points',
-      type: 'circle',
-      source: 'mapillary',
-      'source-layer': 'image',
-      paint: { 
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1, 10, 2.5, 14, 6, 22, 18],
-        'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff'
-      }
-    });
+    map.addLayer({ id: 'mapillary-points', type: 'circle', source: 'mapillary', 'source-layer': 'image', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1, 10, 2.5, 14, 6, 22, 18], 'circle-color': '#35af6d', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' } });
 
-    // 2. Counties (Original stable logic)
+    // 2. Counties
     fetch('./MSDOT/Mississippi_Counties.json').then(res => res.json()).then(data => {
         data.features.forEach(f => f.properties.dynamicColor = stringToColour(f.properties.Name || "default"));
         map.addSource('counties', { type: 'geojson', data: data });
@@ -148,19 +142,11 @@
         map.fitBounds(bounds, { padding: 40 });
     });
 
-    // 3. Debris Points (VEG = Dark Blue)
+    // 3. Debris Points
     fetch('./MSDOT/Debris_Points.json').then(res => res.json()).then(pointData => {
         pointData.features.forEach(f => { if (f.properties.Longitude && f.properties.Latitude) f.geometry = { type: 'Point', coordinates: [parseFloat(f.properties.Longitude), parseFloat(f.properties.Latitude)] }; });
         map.addSource('debris-points', { type: 'geojson', data: pointData });
-        map.addLayer({
-          id: 'debris-layer',
-          type: 'circle',
-          source: 'debris-points',
-          paint: {
-            'circle-radius': 7, 'circle-stroke-width': 2, 'circle-stroke-color': '#fff',
-            'circle-color': ['match', ['get', 'Debris Type'], 'Hanger', '#f1c40f', 'Leaner', '#e67e22', 'VEG', '#003366', 'C&D', '#9b59b6', '#e74c3c']
-          }
-        });
+        map.addLayer({ id: 'debris-layer', type: 'circle', source: 'debris-points', paint: { 'circle-radius': 7, 'circle-stroke-width': 2, 'circle-stroke-color': '#fff', 'circle-color': ['match', ['get', 'Debris Type'], 'Hanger', '#f1c40f', 'Leaner', '#e67e22', 'VEG', '#003366', 'C&D', '#9b59b6', '#e74c3c'] } });
     });
 
     // 4. Drone Points
@@ -183,6 +169,9 @@
     if (selectedType === 'All') {
         map.setFilter('debris-layer', null);
         map.setFilter('drone-layer', null);
+    } else if (selectedType === 'Clear') {
+        map.setFilter('debris-layer', ['==', 'true', 'false']); // Hides all debris
+        map.setFilter('drone-layer', ['==', 'true', 'false']); // Hides all drones
     } else if (selectedType === 'Drone 360') {
         map.setFilter('debris-layer', ['==', 'true', 'false']);
         map.setFilter('drone-layer', null);
