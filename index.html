@@ -45,7 +45,7 @@
 <body>
 
 <div id="left-pane">
-  <div id="view-indicator">Current View: Road Run</div>
+  <div id="view-indicator">Current View: Street Imagery</div>
   <div id="panorama"></div>
   <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false"></iframe>
 </div>
@@ -54,7 +54,7 @@
   <div class="controls">
     <label>From Date</label><input type="date" id="date-from" value="2026-02-03">
     <label>To Date</label><input type="date" id="date-to">
-    <button onclick="applyDateFilter()">Filter Road Runs</button>
+    <button onclick="applyDateFilter()">Filter Street Imagery</button>
     <button onclick="downloadImage()" id="download-btn" style="background: #2c3e50; margin-top: 5px;">Download Image</button>
     <hr style="border:0; border-top:1px solid #eee; margin: 4px 0;">
     <label>Type Filter</label>
@@ -70,7 +70,7 @@
     <label>Legend</label>
     <div class="legend-container">
       <div class="legend-item"><div class="legend-key" style="background: #00ffff; border: 1px solid #000;"></div>Drone 360</div>
-      <div class="legend-item"><div class="legend-key" style="background: #35af6d;"></div>Road Runs</div>
+      <div class="legend-item"><div class="legend-key" style="background: #35af6d;"></div>Street Imagery</div>
       <div class="legend-item"><div class="legend-key" style="background: #f1c40f;"></div>Hanger</div>
       <div class="legend-item"><div class="legend-key" style="background: #e67e22;"></div>Leaner</div>
       <div class="legend-item"><div class="legend-key" style="background: #003366;"></div>VEG</div>
@@ -102,7 +102,7 @@
   }
 
   map.on('load', () => {
-    // 1. Mapillary
+    // 1. Mapillary (Street Imagery)
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
@@ -172,18 +172,18 @@
         map.setFilter('debris-layer', null);
         map.setFilter('drone-layer', null);
     } else if (selectedType === 'Drone 360') {
-        map.setFilter('debris-layer', ['==', 'true', 'false']); // Hide all debris
-        map.setFilter('drone-layer', null); // Show drones
+        map.setFilter('debris-layer', ['==', 'true', 'false']);
+        map.setFilter('drone-layer', null);
     } else {
         map.setFilter('debris-layer', ['==', ['get', 'Debris Type'], selectedType]);
-        map.setFilter('drone-layer', ['==', 'true', 'false']); // Hide drones
+        map.setFilter('drone-layer', ['==', 'true', 'false']);
     }
   }
 
   map.on('click', 'mapillary-points', (e) => {
     currentImageKey = e.features[0].properties.id; currentDroneUrl = null;
     document.getElementById('mly-frame').style.display = 'block'; document.getElementById('panorama').style.display = 'none';
-    document.getElementById('view-indicator').style.display = 'block'; document.getElementById('view-indicator').innerText = 'Current View: Road Run';
+    document.getElementById('view-indicator').style.display = 'block'; document.getElementById('view-indicator').innerText = 'Current View: Street Imagery';
     document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${currentImageKey}&style=photo&menu=false`;
   });
 
@@ -203,7 +203,7 @@
       const res = await fetch(`https://graph.mapillary.com/${currentImageKey}?fields=thumb_2048_url&access_token=${mlyToken}`);
       const data = await res.json();
       finalUrl = data.thumb_2048_url;
-      fileName = `RoadRun_${currentImageKey}.jpg`;
+      fileName = `StreetImagery_${currentImageKey}.jpg`;
     } else if (currentDroneUrl) {
       finalUrl = "https://360-proxy.jmvetters.workers.dev/?url=" + encodeURIComponent(currentDroneUrl);
       fileName = `Drone360_${new Date().getTime()}.jpg`;
