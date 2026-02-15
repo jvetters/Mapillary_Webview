@@ -15,7 +15,8 @@
   #mly-container { position: absolute; top: 0; bottom: 0; left: 0; width: 50%; background: #000; border-right: 2px solid #35af6d; }
   #map-container { position: absolute; top: 0; bottom: 0; right: 0; width: 50%; }
   #map { width: 100%; height: 100%; }
-  iframe { width: 100%; height: 100%; border: none; background: #000; }
+  /* Ensures the interactive frame takes up the whole space */
+  iframe { width: 100%; height: 100%; border: none; background: #000; display: block; }
 
   .controls {
     position: absolute; top: 15px; right: 15px; z-index: 10;
@@ -36,12 +37,11 @@
   .legend-item { display: flex; align-items: center; font-size: 11px; color: #444; font-weight: bold; }
   .legend-key { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; border: 1px solid #fff; }
 
-  /* Notification styling for view switching */
   #view-indicator {
     position: absolute; bottom: 20px; left: 20px; z-index: 20;
-    background: rgba(0,0,0,0.7); color: white; padding: 8px 12px;
+    background: rgba(0,0,0,0.8); color: white; padding: 8px 15px;
     border-radius: 20px; font-size: 12px; pointer-events: none;
-    display: none; border: 1px solid #35af6d;
+    border: 1px solid #00ffff; display: none;
   }
 </style>
 </head>
@@ -49,7 +49,7 @@
 
 <div id="mly-container">
   <div id="view-indicator">Current View: Drone 360</div>
-  <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false&publish=true"></iframe>
+  <iframe id="mly-frame" src="https://www.mapillary.com/embed?style=photo&menu=false&publish=true" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
 </div>
 
 <div id="map-container">
@@ -81,7 +81,6 @@
       <div class="legend-item"><div class="legend-key" style="background: #e67e22;"></div>Leaner</div>
       <div class="legend-item"><div class="legend-key" style="background: #2ecc71;"></div>VEG</div>
       <div class="legend-item"><div class="legend-key" style="background: #9b59b6;"></div>C&D</div>
-      <div class="legend-item"><div class="legend-key" style="background: #e74c3c;"></div>Unknown</div>
     </div>
   </div>
   <div id="map"></div>
@@ -112,7 +111,7 @@
   map.addControl(geocoder, 'top-left');
 
   map.on('load', () => {
-    // 1. Mapillary Lines & Points
+    // 1. Mapillary
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
@@ -121,14 +120,14 @@
     map.addLayer({ id: 'mapillary-lines', type: 'line', source: 'mapillary', 'source-layer': 'sequence', paint: { 'line-color': '#35af6d', 'line-width': 1.5, 'line-opacity': 0.6 } });
     map.addLayer({ id: 'mapillary-points', type: 'circle', source: 'mapillary', 'source-layer': 'image', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1, 10, 2.5, 14, 6, 22, 18], 'circle-color': ['case', ['boolean', ['feature-state', 'selected'], false], '#ff9f43', '#35af6d'], 'circle-stroke-width': ['case', ['boolean', ['feature-state', 'selected'], false], 3, 1], 'circle-stroke-color': '#fff' } });
 
-    // 2. Debris Points
+    // 2. Debris
     fetch('./MSDOT/Debris_Points.json').then(res => res.json()).then(pointData => {
         pointData.features.forEach(f => { if (f.properties.Longitude && f.properties.Latitude) f.geometry = { type: 'Point', coordinates: [parseFloat(f.properties.Longitude), parseFloat(f.properties.Latitude)] }; });
         map.addSource('debris-points', { type: 'geojson', data: pointData });
         map.addLayer({ id: 'debris-layer', type: 'circle', source: 'debris-points', paint: { 'circle-radius': 7, 'circle-stroke-width': 2, 'circle-stroke-color': '#fff', 'circle-color': ['match', ['get', 'Debris Type'], 'Hanger', '#f1c40f', 'Leaner', '#e67e22', 'VEG', '#2ecc71', 'C&D', '#9b59b6', '#e74c3c'] } });
     });
 
-    // 3. Drone Points
+    // 3. Drone 360
     map.addSource('drone-360', {
         type: 'geojson',
         data: './MSDOT/dronepoints.json'
@@ -148,9 +147,7 @@
     applyDateFilter();
   });
 
-  // Controls & Click Handlers
   function zoomMapillary(delta) {
-    // Only works when Mapillary is active
     currentZoom = Math.min(Math.max(currentZoom + delta, 0.5), 3.0);
     document.getElementById('mly-frame').contentWindow.postMessage(JSON.stringify({type: 'mly.zoom', value: currentZoom}), 'https://www.mapillary.com');
   }
@@ -159,43 +156,39 @@
   map.on('click', 'mapillary-points', (e) => {
     const feature = e.features[0];
     currentImageKey = feature.properties.id;
-    
-    // Toggle Indicator
-    const indicator = document.getElementById('view-indicator');
-    indicator.style.display = 'block';
-    indicator.innerText = 'Current View: Mapillary Road Run';
+    document.getElementById('view-indicator').style.display = 'block';
+    document.getElementById('view-indicator').innerText = 'Current View: Mapillary Road Run';
+    document.getElementById('view-indicator').style.borderColor = '#35af6d';
 
     if (selectedPointId !== null) map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: false });
     selectedPointId = e.features[0].id;
     map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: true });
     
-    // Update Iframe Source
     document.getElementById('mly-frame').src = `https://www.mapillary.com/embed?image_key=${currentImageKey}&style=photo&menu=false&publish=true`;
   });
 
   map.on('click', 'debris-layer', (e) => {
     const props = e.features[0].properties;
-    new mapboxgl.Popup().setLngLat(e.lngLat).setHTML(`<strong>Debris:</strong> ${props['Debris Type']}<br>Lat: ${props.Latitude}`).addTo(map);
+    new mapboxgl.Popup().setLngLat(e.lngLat).setHTML(`<strong>Debris:</strong> ${props['Debris Type']}`).addTo(map);
   });
 
-  // NEW DUAL-VIEW LOGIC: Populates the left pane with Drone Image
+  // UPDATED DRONE LOGIC: Converts the ID to a full-screen interactive preview link
   map.on('click', 'drone-layer', (e) => {
     const props = e.features[0].properties;
-    const driveUrl = props.Viewer_Link;
+    const driveId = props.Drive_ID; // We use the ID directly for the best viewer
     
-    // Toggle Indicator
-    const indicator = document.getElementById('view-indicator');
-    indicator.style.display = 'block';
-    indicator.innerText = `Current View: Drone 360 (${props.DateTime || 'N/A'})`;
+    document.getElementById('view-indicator').style.display = 'block';
+    document.getElementById('view-indicator').innerText = `Current View: Drone 360 (${props.DateTime || 'N/A'})`;
+    document.getElementById('view-indicator').style.borderColor = '#00ffff';
 
-    // Clear Mapillary selection
     if (selectedPointId !== null) {
         map.setFeatureState({ source: 'mapillary', sourceLayer: 'image', id: selectedPointId }, { selected: false });
         selectedPointId = null;
     }
 
-    // Update the same iframe used by Mapillary
-    document.getElementById('mly-frame').src = driveUrl;
+    // THE INTERACTIVE VIEWER LINK 
+    const interactiveUrl = `https://drive.google.com/file/d/${driveId}/preview`;
+    document.getElementById('mly-frame').src = interactiveUrl;
   });
 
   function applyDateFilter() {
@@ -214,7 +207,7 @@
   }
 
   async function downloadImage() {
-    if (!currentImageKey) { alert("Select a road point (Green) to download Mapillary images."); return; }
+    if (!currentImageKey) { alert("Select a road point first."); return; }
     try {
       const res = await fetch(`https://graph.mapillary.com/${currentImageKey}?fields=thumb_2048_url&access_token=${mlyToken}`);
       const data = await res.json();
@@ -225,7 +218,7 @@
         a.download = `Debris_View_${currentImageKey}.jpg`;
         a.click();
       }
-    } catch (err) { alert("Security block. Use browser 'Save As'."); }
+    } catch (err) { alert("Security block. Use browser save."); }
   }
 
   const layerIds = ['mapillary-points', 'debris-layer', 'drone-layer'];
