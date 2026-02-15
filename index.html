@@ -36,7 +36,7 @@
   .legend-container { margin-top: 5px; display: flex; flex-direction: column; gap: 6px; }
   .legend-item { display: flex; align-items: center; font-size: 11px; color: #444; font-weight: bold; }
   .legend-key { width: 14px; height: 14px; border-radius: 50%; margin-right: 10px; border: 1px solid #fff; }
-  .legend-icon { width: 24px; height: 24px; margin-right: 10px; object-fit: contain; }
+  .legend-icon { width: 22px; height: 22px; margin-right: 10px; filter: brightness(0) saturate(100%) invert(48%) sepia(89%) saturate(413%) hue-rotate(97deg) brightness(91%) contrast(87%); }
 
   #view-indicator {
     position: absolute; bottom: 20px; left: 20px; z-index: 20;
@@ -76,7 +76,7 @@
     <hr style="border:0; border-top:1px solid #eee; margin: 4px 0;">
     <label>Legend</label>
     <div class="legend-container">
-      <div class="legend-item"><img src="https://docs.mapbox.com/mapbox-gl-js/assets/custom_marker.png" class="legend-icon">Drone 360</div>
+      <div class="legend-item"><img src="https://raw.githubusercontent.com/mapbox/maki/main/icons/airport-15.svg" class="legend-icon">Drone 360</div>
       <div class="legend-item"><div class="legend-key" style="background: #35af6d;"></div>Road Runs</div>
       <div class="legend-item"><div class="legend-key" style="background: #f1c40f;"></div>Hanger</div>
       <div class="legend-item"><div class="legend-key" style="background: #e67e22;"></div>Leaner</div>
@@ -104,38 +104,28 @@
   map.addControl(geocoder, 'top-left');
 
   map.on('load', () => {
-    // 1. Load LARGE Drone Icon
-    map.loadImage('https://docs.mapbox.com/mapbox-gl-js/assets/custom_marker.png', (error, image) => {
+    // 1. Load Maki Airport Icon for Drone Points
+    map.loadImage('https://raw.githubusercontent.com/mapbox/maki/main/icons/airport-15.png', (error, image) => {
         if (error) throw error;
-        map.addImage('drone-icon', image);
+        map.addImage('drone-icon', image, { sdf: true }); // sdf: true allows us to change color
     });
 
-    // 2. County Polygons Source & Layer
-    map.addSource('counties', {
-        type: 'geojson',
-        data: './MSDOT/counties.json' // Ensure this path is correct in your repo
-    });
-
-    map.addLayer({
-        id: 'county-layer',
-        type: 'fill',
-        source: 'counties',
-        paint: {
-            'fill-color': '#000',
-            'fill-opacity': 0.05
-        }
-    });
-
-    map.addLayer({
-        id: 'county-outline',
-        type: 'line',
-        source: 'counties',
-        paint: {
-            'line-color': '#35af6d',
-            'line-width': 2,
-            'line-opacity': 0.5
-        }
-    });
+    // 2. RESTORED COUNTY POLYGONS (Fixed Filename)
+    fetch('./MSDOT/Mississippi_Counties.json').then(res => res.json()).then(data => {
+        map.addSource('counties', { type: 'geojson', data: data });
+        map.addLayer({
+            id: 'county-layer',
+            type: 'fill',
+            source: 'counties',
+            paint: { 'fill-color': '#000', 'fill-opacity': 0.05 }
+        });
+        map.addLayer({
+            id: 'county-outline',
+            type: 'line',
+            source: 'counties',
+            paint: { 'line-color': '#35af6d', 'line-width': 1.5, 'line-opacity': 0.4 }
+        });
+    }).catch(err => console.error("County file load error:", err));
 
     // 3. Mapillary
     map.addSource('mapillary', { type: 'vector', tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`], promoteId: 'id' });
@@ -149,7 +139,7 @@
         map.addLayer({ id: 'debris-layer', type: 'circle', source: 'debris-points', paint: { 'circle-radius': 7, 'circle-color': ['match', ['get', 'Debris Type'], 'Hanger', '#f1c40f', 'Leaner', '#e67e22', 'VEG', '#2ecc71', 'C&D', '#9b59b6', '#e74c3c'] } });
     });
 
-    // 5. Drone (WITH MUCH LARGER ICON)
+    // 5. Drone (Maki Icon)
     map.addSource('drone-360', { type: 'geojson', data: './MSDOT/dronepoints.json' });
     map.addLayer({
         id: 'drone-layer',
@@ -157,9 +147,14 @@
         source: 'drone-360',
         layout: {
             'icon-image': 'drone-icon',
-            'icon-size': 0.6, // INCREASED TO BE PROMINENT
+            'icon-size': 2.0, // MUCH LARGER SCALE
             'icon-allow-overlap': true,
             'icon-ignore-placement': true
+        },
+        paint: {
+            'icon-color': '#00ffff', // SDR SDF tech allows this cyan color
+            'icon-halo-color': '#000',
+            'icon-halo-width': 1
         }
     });
 
@@ -181,7 +176,6 @@
     const props = e.features[0].properties;
     currentDroneUrl = props.Viewer_Link; currentImageKey = null;
     document.getElementById('mly-frame').style.display = 'none'; document.getElementById('panorama').style.display = 'block';
-    
     const indicator = document.getElementById('view-indicator');
     indicator.style.display = 'block';
     indicator.innerText = `Current View: Drone 360 | ${props.DateTime || 'N/A'}`;
