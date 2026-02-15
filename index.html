@@ -98,8 +98,8 @@
   const mlyToken = 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b';
   let pnmViewer = null, currentImageKey = null, currentDroneUrl = null, selectedPointId = null;
 
-  // Initial nudged center and zoom level
-  const homePosition = { center: [-90.20, 32.70], zoom: 6.8 };
+  // REFINED NUDGE: -90.5 longitude pushes the map left to clear UI. Zoom back to 6.
+  const homePosition = { center: [-90.5, 32.35], zoom: 6.0 };
 
   const map = new mapboxgl.Map({
     container: 'map',
@@ -117,7 +117,7 @@
   });
   map.addControl(geocoder, 'top-left');
 
-  // Custom Home Button Control
+  // Home Button Class
   class HomeControl {
     onAdd(map) {
       this._map = map;
