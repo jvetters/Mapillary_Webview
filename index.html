@@ -15,13 +15,69 @@
 
 <style>
   body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background: #f4f4f4; overflow: hidden; }
+  
+  /* SPLASH SCREEN STYLES */
+  #vetted-splash-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(15, 23, 42, 0.98);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    transition: opacity 0.5s ease;
+  }
+  .vetted-modal {
+    background: #ffffff;
+    width: 90%;
+    max-width: 800px;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+    text-align: center;
+  }
+  .video-container {
+    position: relative;
+    padding-bottom: 56.25%;
+    height: 0;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #000;
+    margin: 20px 0;
+  }
+  .video-container iframe {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+  }
+  .vetted-ip-notice {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-bottom: 20px;
+    line-height: 1.4;
+    font-style: italic;
+  }
+  .vetted-btn {
+    background-color: #35af6d;
+    color: white;
+    padding: 12px 40px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 1rem;
+  }
+  .vetted-btn:hover { background-color: #2d965d; }
+  .vetted-hidden { opacity: 0; pointer-events: none; }
+
+  /* MAP INTERFACE STYLES */
   #left-pane { position: absolute; top: 0; bottom: 0; left: 0; width: 50%; background: #000; border-right: 2px solid #35af6d; z-index: 5; }
   #map-container { position: absolute; top: 0; bottom: 0; right: 0; width: 50%; }
   #map { width: 100%; height: 100%; }
   iframe, #panorama { width: 100%; height: 100%; border: none; background: #000; display: block; }
   #panorama { display: none; }
 
-  /* Search Bar Width */
   .mapboxgl-ctrl-geocoder { min-width: 280px !important; }
 
   .controls {
@@ -54,6 +110,28 @@
 </style>
 </head>
 <body>
+
+<div id="vetted-splash-overlay">
+  <div class="vetted-modal">
+    <h2 style="margin:0; color:#1e293b;">MSDOT Portal User Guide</h2>
+    <p style="margin:5px 0 0 0;">Tutorial for Vetted Analytics Debris Management Portal</p>
+    
+    <div class="video-container">
+      <iframe 
+        src="https://www.youtube.com/embed/h6YMLmxcRus?rel=0&modestbranding=1" 
+        frameborder="0" 
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+        allowfullscreen>
+      </iframe>
+    </div>
+
+    <p class="vetted-ip-notice">
+      Notice: The data visualizations and proprietary methodologies contained within this application are the intellectual property of Vetted Analytics. Unauthorized distribution is prohibited.
+    </p>
+    
+    <button id="vetted-enter-btn" class="vetted-btn">I Agree & Enter Portal</button>
+  </div>
+</div>
 
 <div id="left-pane">
   <div id="view-indicator">Current View: Street Imagery</div>
@@ -93,11 +171,27 @@
 </div>
 
 <script>
+  // SPLASH SCREEN LOGIC
+  document.addEventListener('DOMContentLoaded', function() {
+    const splash = document.getElementById('vetted-splash-overlay');
+    const btn = document.getElementById('vetted-enter-btn');
+
+    // Check if the guide was already dismissed this session
+    if (sessionStorage.getItem('msdot_guide_seen')) {
+      splash.style.display = 'none';
+    }
+
+    btn.addEventListener('click', function() {
+      splash.classList.add('vetted-hidden');
+      sessionStorage.setItem('msdot_guide_seen', 'true');
+      setTimeout(() => { splash.style.display = 'none'; }, 500);
+    });
+  });
+
   mapboxgl.accessToken = 'pk.eyJ1IjoianZldHRlcnMiLCJhIjoiY21sazFhdDg5MDV3dDNlcTI3aXlwejIwaSJ9.ecEavihruz0TZguVQvRiVg';
   const mlyToken = 'MLY|25724468457195152|d9c0ac6f4fbcd6ede3a3ba4e8332729b';
   let pnmViewer = null, currentImageKey = null, currentDroneUrl = null, selectedPointId = null, lastBounds = null;
 
-  // Reverted to Stable Start Position
   const map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/mapbox/light-v11',
@@ -143,7 +237,6 @@
   }
 
   map.on('load', () => {
-    // 1. Street Imagery
     map.addSource('mapillary', {
       type: 'vector',
       tiles: [`https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${mlyToken}`],
@@ -165,7 +258,6 @@
       }
     });
 
-    // 2. Counties (Dynamic FitBounds Restored)
     fetch('./MSDOT/Mississippi_Counties.json').then(res => res.json()).then(data => {
         data.features.forEach(f => f.properties.dynamicColor = stringToColour(f.properties.Name || "default"));
         map.addSource('counties', { type: 'geojson', data: data });
@@ -182,14 +274,12 @@
         map.fitBounds(bounds, { padding: 40 });
     });
 
-    // 3. Debris Points (VEG = Dark Blue)
     fetch('./MSDOT/Debris_Points.json').then(res => res.json()).then(pointData => {
         pointData.features.forEach(f => { if (f.properties.Longitude && f.properties.Latitude) f.geometry = { type: 'Point', coordinates: [parseFloat(f.properties.Longitude), parseFloat(f.properties.Latitude)] }; });
         map.addSource('debris-points', { type: 'geojson', data: pointData });
         map.addLayer({ id: 'debris-layer', type: 'circle', source: 'debris-points', paint: { 'circle-radius': 7, 'circle-stroke-width': 2, 'circle-stroke-color': '#fff', 'circle-color': ['match', ['get', 'Debris Type'], 'Hanger', '#f1c40f', 'Leaner', '#e67e22', 'VEG', '#003366', 'C&D', '#9b59b6', '#e74c3c'] } });
     });
 
-    // 4. Drone Points
     map.addSource('drone-360', { type: 'geojson', data: './MSDOT/dronepoints.json' });
     map.addLayer({ id: 'drone-layer', type: 'circle', source: 'drone-360', paint: { 'circle-radius': 12, 'circle-color': '#00ffff', 'circle-stroke-width': 2, 'circle-stroke-color': '#000' } });
 
