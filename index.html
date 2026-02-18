@@ -88,8 +88,14 @@
   }
   label { font-size: 10px; font-weight: bold; color: #666; text-transform: uppercase; }
   input, select { padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; width: 100%; }
+  
+  /* Buttons */
   button { padding: 10px; background: #35af6d; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
   button:hover { background: #2d965d; }
+  .btn-secondary { background: #2c3e50; margin-top: 2px; }
+  .btn-secondary:hover { background: #1a252f; }
+  .btn-zoom { background: #0078d4; margin-top: 2px; }
+  .btn-zoom:hover { background: #005a9e; }
 
   .legend-container { margin-top: 5px; display: flex; flex-direction: column; gap: 4px; }
   .legend-item { display: flex; align-items: center; font-size: 11px; color: #444; font-weight: bold; }
@@ -144,7 +150,9 @@
     <label>From Date</label><input type="date" id="date-from" value="2026-02-03">
     <label>To Date</label><input type="date" id="date-to">
     <button onclick="applyDateFilter()">Filter Street Imagery</button>
-    <button onclick="downloadImage()" id="download-btn" style="background: #2c3e50; margin-top: 5px;">Download Image</button>
+    <button onclick="zoomToImagery()" class="btn-zoom">Street Imagery Zoom</button>
+    <button onclick="downloadImage()" class="btn-secondary" id="download-btn">Download Image</button>
+    
     <hr style="border:0; border-top:1px solid #eee; margin: 4px 0;">
     <label>Type Filter</label>
     <select id="debris-type-selector" onchange="applyDebrisFilter()">
@@ -175,12 +183,9 @@
   document.addEventListener('DOMContentLoaded', function() {
     const splash = document.getElementById('vetted-splash-overlay');
     const btn = document.getElementById('vetted-enter-btn');
-
-    // Check if the guide was already dismissed this session
     if (sessionStorage.getItem('msdot_guide_seen')) {
       splash.style.display = 'none';
     }
-
     btn.addEventListener('click', function() {
       splash.classList.add('vetted-hidden');
       sessionStorage.setItem('msdot_guide_seen', 'true');
@@ -207,6 +212,11 @@
       zoom: 16
   });
   map.addControl(geocoder, 'top-left');
+
+  // Logic to zoom to imagery threshold without moving map center
+  function zoomToImagery() {
+    map.zoomTo(14.2, { duration: 1000 });
+  }
 
   class HomeControl {
     onAdd(map) {
@@ -262,7 +272,6 @@
         data.features.forEach(f => f.properties.dynamicColor = stringToColour(f.properties.Name || "default"));
         map.addSource('counties', { type: 'geojson', data: data });
         map.addLayer({ id: 'county-fills', type: 'fill', source: 'counties', paint: { 'fill-color': ['get', 'dynamicColor'], 'fill-opacity': 0.15, 'fill-outline-color': '#000' } }, 'mapillary-lines');
-        
         const bounds = new mapboxgl.LngLatBounds();
         data.features.forEach(f => {
           if (f.geometry && f.geometry.coordinates) {
@@ -282,7 +291,6 @@
 
     map.addSource('drone-360', { type: 'geojson', data: './MSDOT/dronepoints.json' });
     map.addLayer({ id: 'drone-layer', type: 'circle', source: 'drone-360', paint: { 'circle-radius': 12, 'circle-color': '#00ffff', 'circle-stroke-width': 2, 'circle-stroke-color': '#000' } });
-
     applyDateFilter();
   });
 
